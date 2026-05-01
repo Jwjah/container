@@ -1,21 +1,12 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
-  host: '74.125.142.108', // DIRECT IPv4 for smtp.gmail.com
-  port: smtpPort,
-  secure: smtpPort === 465,
+  service: 'gmail',
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  dnsTimeout: 5000,
-  connectionTimeout: 5000,
-  family: 4 // FORCE IPv4 to fix ENETUNREACH on Render/Cloud
+  }
 });
 
 transporter.verify()
