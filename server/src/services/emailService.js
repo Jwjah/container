@@ -5,9 +5,16 @@
 const { Resend } = require('resend');
 require('dotenv').config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Try RESEND_API_KEY first, then fall back to SMTP_PASS
+const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
 
-console.log('✅ Resend email service initialized');
+if (!apiKey) {
+  console.warn('⚠️ No RESEND_API_KEY or SMTP_PASS found — emails will fail');
+} else {
+  console.log('✅ Resend email service initialized (key starts with:', apiKey.substring(0, 6) + '...)');
+}
+
+const resend = new Resend(apiKey);
 
 const sendOTP = async (email, otp, purpose = 'verification') => {
   const subjects = {
@@ -38,24 +45,19 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     </div>
   `;
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from: 'CampusPrint <onboarding@resend.dev>',
-      to: [email],
-      subject: subjects[purpose] || subjects.verification,
-      html,
-    });
+  const { data, error } = await resend.emails.send({
+    from: 'CampusPrint <onboarding@resend.dev>',
+    to: [email],
+    subject: subjects[purpose] || subjects.verification,
+    html,
+  });
 
-    if (error) {
-      console.error(`❌ Resend API error:`, error);
-      throw new Error(error.message || 'Email delivery failed');
-    }
-
-    console.log(`📧 OTP email sent to ${email} (ID: ${data.id})`);
-  } catch (err) {
-    console.error(`❌ Failed to send OTP email to ${email}:`, err.message);
-    throw new Error('Email delivery failed. Please try again.');
+  if (error) {
+    console.error(`❌ Resend API error for ${email}:`, JSON.stringify(error));
+    throw new Error(error.message || 'Email delivery failed');
   }
+
+  console.log(`📧 OTP email sent to ${email} (ID: ${data.id})`);
 };
 
 module.exports = { sendOTP };

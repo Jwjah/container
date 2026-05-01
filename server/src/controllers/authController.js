@@ -36,10 +36,19 @@ exports.register = async (req, res) => {
       'INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)',
       [email, otp, 'register', expiresAt]
     );
-    await sendOTP(email, otp, 'register');
+
+    let emailSent = false;
+    try {
+      await sendOTP(email, otp, 'register');
+      emailSent = true;
+    } catch (emailErr) {
+      console.error('⚠️ OTP email failed, but registration succeeded:', emailErr.message);
+    }
 
     res.status(201).json({
-      message: 'Registration successful. Check your email for OTP.',
+      message: emailSent
+        ? 'Registration successful. Check your email for OTP.'
+        : 'Registration successful. OTP email could not be sent — please use Resend OTP on login.',
       userId: result.insertId,
       requiresOTP: true,
     });
