@@ -1,20 +1,20 @@
 /**
- * Email Service — Uses Resend HTTP API (port 443)
- * This bypasses SMTP port blocking on Render free tier.
+ * Email Service — Uses Brevo (Sendinblue) HTTP API
+ * Works on Render free tier because it uses HTTPS (port 443),
+ * which is never blocked unlike SMTP ports (25, 465, 587).
+ *
+ * Free plan: 300 emails/day, no domain verification needed.
  */
-const { Resend } = require('resend');
 require('dotenv').config();
 
-// Try RESEND_API_KEY first, then fall back to SMTP_PASS
-const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SMTP_USER || 'abhir2756@gmail.com';
 
-if (!apiKey) {
-  console.warn('⚠️ No RESEND_API_KEY or SMTP_PASS found — emails will fail');
+if (!BREVO_API_KEY) {
+  console.warn('⚠️ BREVO_API_KEY not found — email sending will fail');
 } else {
-  console.log('✅ Resend email service initialized (key starts with:', apiKey.substring(0, 6) + '...)');
+  console.log('✅ Brevo email service initialized');
 }
-
-const resend = new Resend(apiKey);
 
 const sendOTP = async (email, otp, purpose = 'verification') => {
   const subjects = {
@@ -45,19 +45,29 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     </div>
   `;
 
-  const { data, error } = await resend.emails.send({
-    from: 'CampusPrint <onboarding@resend.dev>',
-    to: [email],
-    subject: subjects[purpose] || subjects.verification,
-    html,
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': BREVO_API_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'CampusPrint', email: SENDER_EMAIL },
+      to: [{ email }],
+      subject: subjects[purpose] || subjects.verification,
+      htmlContent: html,
+    }),
   });
 
-  if (error) {
-    console.error(`❌ Resend API error for ${email}:`, JSON.stringify(error));
-    throw new Error(error.message || 'Email delivery failed');
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error('❌ Brevo API error:', JSON.stringify(result));
+    throw new Error(result.message || 'Email delivery failed');
   }
 
-  console.log(`📧 OTP email sent to ${email} (ID: ${data.id})`);
+  console.log(`📧 OTP email sent to ${email} (messageId: ${result.messageId})`);
 };
 
 module.exports = { sendOTP };
