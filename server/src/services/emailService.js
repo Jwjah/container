@@ -5,14 +5,17 @@ const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: smtpPort,
-  secure: smtpPort === 465, // true for 465, false for 587
+  secure: smtpPort === 465,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
   tls: {
-    rejectUnauthorized: false // Helps avoid issues with some cloud providers
-  }
+    rejectUnauthorized: false
+  },
+  dnsTimeout: 5000,
+  connectionTimeout: 5000,
+  family: 4 // FORCE IPv4 to fix ENETUNREACH on Render/Cloud
 });
 
 transporter.verify()

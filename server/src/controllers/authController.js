@@ -168,10 +168,10 @@ exports.resendOTP = async (req, res) => {
     );
     await sendOTP(email, otp, 'login');
 
-    res.json({ message: 'OTP resent successfully' });
+    res.json({ message: 'OTP sent successfully' });
   } catch (err) {
     console.error('Resend OTP error:', err);
-    res.status(500).json({ error: err.message || 'Failed to resend OTP' });
+    res.status(500).json({ error: err.message || 'Failed to send OTP' });
   }
 };
 
