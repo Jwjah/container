@@ -1,19 +1,13 @@
-const nodemailer = require('nodemailer');
+/**
+ * Email Service — Uses Resend HTTP API (port 443)
+ * This bypasses SMTP port blocking on Render free tier.
+ */
+const { Resend } = require('resend');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.resend.com',
-  port: parseInt(process.env.SMTP_PORT) || 465,
-  secure: true, // true for 465
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-transporter.verify()
-  .then(() => console.log('✅ SMTP ready'))
-  .catch(err => console.warn('⚠️  SMTP verification failed (will retry on send):', err.message));
+console.log('✅ Resend email service initialized');
 
 const sendOTP = async (email, otp, purpose = 'verification') => {
   const subjects = {
@@ -45,16 +39,22 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
   `;
 
   try {
-    await transporter.sendMail({
-      from: `"CampusPrint" <${process.env.SMTP_USER}>`,
-      to: email,
+    const { data, error } = await resend.emails.send({
+      from: 'CampusPrint <onboarding@resend.dev>',
+      to: [email],
       subject: subjects[purpose] || subjects.verification,
       html,
     });
-    console.log(`📧 OTP email sent to ${email}`);
+
+    if (error) {
+      console.error(`❌ Resend API error:`, error);
+      throw new Error(error.message || 'Email delivery failed');
+    }
+
+    console.log(`📧 OTP email sent to ${email} (ID: ${data.id})`);
   } catch (err) {
     console.error(`❌ Failed to send OTP email to ${email}:`, err.message);
-    throw new Error('Email delivery failed. Please check your SMTP configuration.');
+    throw new Error('Email delivery failed. Please try again.');
   }
 };
 
