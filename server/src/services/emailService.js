@@ -3,7 +3,7 @@ require('dotenv').config();
 
 const smtpPort = parseInt(process.env.SMTP_PORT) || 587;
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: '74.125.142.108', // DIRECT IPv4 for smtp.gmail.com
   port: smtpPort,
   secure: smtpPort === 465,
   auth: {
