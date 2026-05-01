@@ -1,0 +1,23 @@
+
+> client@0.1.0 build
+> next build
+
+▲ Next.js 16.2.4 (Turbopack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.8s
+  Running TypeScript ...
+Failed to type check.
+
+./src/app/admin/orders/page.tsx:83:17
+Type error: Type '{ children: Element[]; className: string; style: { padding: string; display: "flex"; justifyContent: "space-between"; alignItems: "center"; cursor: "pointer"; }; onClick: () => void; }' is not assignable to type 'IntrinsicAttributes & { children: ReactNode; className?: string | undefined; style?: CSSProperties | undefined; scale?: number | undefined; }'.
+  Property 'onClick' does not exist on type 'IntrinsicAttributes & { children: ReactNode; className?: string | undefined; style?: CSSProperties | undefined; scale?: number | undefined; }'.
+
+  [90m81 |[0m                 className=[32m"glass-card"[0m 
+  [90m82 |[0m                 style={{ padding: [32m'16px 24px'[0m, display: [32m'flex'[0m, justifyContent: [32m'space-bet...[0m
+[31m[1m>[0m [90m83 |[0m                 onClick={() => setSelected(order)}
+  [90m   |[0m                 [31m[1m^[0m
+  [90m84 |[0m               >
+  [90m85 |[0m                 <div style={{ display: [32m'flex'[0m, gap: [35m20[0m, alignItems: [32m'center'[0m }}>
+  [90m86 |[0m                   <div>
+Next.js build worker exited with code: 1 and signal: null

@@ -1,5 +1,33 @@
+# Dependencies
 node_modules/
-venv/
+.pnp
+.pnp.js
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+venv/
 *.zip
 uploads/
+server/data/campus.db-shm
+server/data/campus.db-wal
