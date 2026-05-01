@@ -1,0 +1,106 @@
+/**
+ * Database adapter — uses SQLite for local development, MySQL for production.
+ * Provides a mysql2-compatible interface (pool.execute returns [rows, fields]).
+ */
+require('dotenv').config();
+
+const USE_SQLITE = process.env.DB_MODE === 'sqlite' || process.env.DB_HOST === 'mysql9.serv00.com';
+
+let db;
+
+if (USE_SQLITE) {
+  const Database = require('better-sqlite3');
+  const path = require('path');
+  const dbPath = path.join(__dirname, '../../data/campus.db');
+  const fs = require('fs');
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+  const sqlite = new Database(dbPath);
+  sqlite.pragma('journal_mode = WAL');
+  sqlite.pragma('foreign_keys = ON');
+
+  console.log('✅ SQLite connected (local dev mode)');
+
+  // Wrap SQLite to match mysql2 pool.execute(query, params) -> [rows]
+  db = {
+    execute: async (query, params = []) => {
+      // Convert MySQL syntax to SQLite
+      let q = query
+        .replace(/ENGINE=InnoDB DEFAULT CHARSET=utf8mb4/gi, '')
+        .replace(/AUTO_INCREMENT/gi, 'AUTOINCREMENT')
+        .replace(/INT AUTO_INCREMENT/gi, 'INTEGER')
+        .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
+        .replace(/TINYINT\(1\)/gi, 'INTEGER')
+        .replace(/VARCHAR\(\d+\)/gi, 'TEXT')
+        .replace(/DECIMAL\(\d+,\d+\)/gi, 'REAL')
+        .replace(/ENUM\([^)]+\)/gi, 'TEXT')
+        .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP/gi, 'TEXT DEFAULT CURRENT_TIMESTAMP')
+        .replace(/TIMESTAMP DEFAULT CURRENT_TIMESTAMP/gi, 'TEXT DEFAULT CURRENT_TIMESTAMP')
+        .replace(/TIMESTAMP NOT NULL/gi, 'TEXT NOT NULL')
+        .replace(/TIMESTAMP NULL/gi, 'TEXT')
+        .replace(/TIMESTAMP/gi, 'TEXT')
+        .replace(/JSON DEFAULT NULL/gi, 'TEXT DEFAULT NULL')
+        .replace(/\bJSON\b(?!\s*(_|OBJECT|ARRAYAGG))/gi, 'TEXT')
+        .replace(/CURRENT_TEXT/gi, 'CURRENT_TIMESTAMP')
+        .replace(/JSON_ARRAYAGG/gi, 'json_group_array')
+        .replace(/INDEX\s+\w+\s*\([^)]+\),?/gi, '')
+        .replace(/,\s*FOREIGN KEY[^,)]+/gi, '')
+        .replace(/,\s*\)/g, ')')
+        .replace(/DATE_SUB\(NOW\(\),\s*INTERVAL\s+(\d+)\s+DAY\)/gi, "datetime('now', '-$1 days')")
+        .replace(/NOW\(\)/gi, "datetime('now')")
+        .replace(/DATE\((\w+)\)/gi, "date($1)")
+
+        .replace(/COALESCE/gi, 'COALESCE')
+        .replace(/LIMIT\s+\?\s+OFFSET\s+\?/gi, 'LIMIT ? OFFSET ?');
+
+      // Replace ? placeholders with SQLite-compatible values
+      const sqliteParams = params.map(p => {
+        if (p === true) return 1;
+        if (p === false) return 0;
+        if (p === null || p === undefined) return null;
+        if (p instanceof Date) return p.toISOString().replace('T', ' ').substring(0, 19);
+        return p;
+      });
+
+      const trimmed = q.trim();
+
+      try {
+        if (trimmed.toUpperCase().startsWith('SELECT') || trimmed.toUpperCase().startsWith('WITH')) {
+          const rows = sqlite.prepare(trimmed).all(...sqliteParams);
+          return [rows, []];
+        } else if (trimmed.toUpperCase().startsWith('INSERT')) {
+          const info = sqlite.prepare(trimmed).run(...sqliteParams);
+          return [{ insertId: info.lastInsertRowid, affectedRows: info.changes }, []];
+        } else {
+          const info = sqlite.prepare(trimmed).run(...sqliteParams);
+          return [{ affectedRows: info.changes }, []];
+        }
+      } catch (err) {
+        // Silently handle some CREATE TABLE issues
+        if (err.message.includes('already exists') || err.message.includes('duplicate column')) {
+          return [[], []];
+        }
+        throw err;
+      }
+    },
+    getConnection: async () => ({ release: () => {} }),
+  };
+} else {
+  const mysql = require('mysql2/promise');
+  db = mysql.createPool({
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    charset: 'utf8mb4',
+  });
+
+  db.getConnection()
+    .then(conn => { console.log('✅ MySQL connected'); conn.release(); })
+    .catch(err => console.error('❌ MySQL failed:', err.message));
+}
+
+module.exports = db;
