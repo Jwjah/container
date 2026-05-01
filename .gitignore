@@ -1,6 +1,5 @@
 node_modules/
-server/uploads/
-*.zip
-.env
 venv/
-server/crowd_project/venv/
+.env
+*.zip
+uploads/
