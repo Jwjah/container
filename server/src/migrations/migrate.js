@@ -262,10 +262,6 @@ const migrate = async () => {
 
   // Seed super admin
   try {
-    // ONE-TIME CLEANUP: Remove typo users or old test data
-    await db.execute('DELETE FROM users WHERE email != ?', [process.env.ADMIN_EMAIL]);
-    console.log('  🧹 Cleaned up old users');
-
     const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
     const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [process.env.ADMIN_EMAIL]);
     
