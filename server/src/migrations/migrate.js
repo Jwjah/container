@@ -262,16 +262,22 @@ const migrate = async () => {
 
   // Seed super admin
   try {
+    const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
     const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [process.env.ADMIN_EMAIL]);
+    
     if (!existing || existing.length === 0) {
-      const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
       await db.execute(
         'INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, ?)',
         ['Super Admin', process.env.ADMIN_EMAIL, hash, 'admin', 1]
       );
-      console.log('\n  👑 Super Admin seeded:', process.env.ADMIN_EMAIL);
+      console.log('\n  👑 Super Admin created:', process.env.ADMIN_EMAIL);
     } else {
-      console.log('\n  👑 Super Admin already exists');
+      // Update existing admin to ensure password and role are correct
+      await db.execute(
+        'UPDATE users SET password = ?, role = ?, is_verified = 1 WHERE email = ?',
+        [hash, 'admin', process.env.ADMIN_EMAIL]
+      );
+      console.log('\n  👑 Super Admin updated:', process.env.ADMIN_EMAIL);
     }
   } catch (err) {
     console.error('  ❌ Admin seed error:', err.message);
