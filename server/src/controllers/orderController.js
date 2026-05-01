@@ -1,8 +1,7 @@
 const db = require('../config/database');
 const { generateOrderHash, generateQRCode, calculatePrice } = require('../utils/helpers');
 const { PDFDocument } = require('pdf-lib');
-const fs = require('fs');
-const path = require('path');
+const { uploadToCloudinary } = require('../middleware/upload');
 
 // POST /api/orders — Create a new order
 exports.createOrder = async (req, res) => {
@@ -28,7 +27,7 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ error: 'This shop is currently closed. Please choose another shop.' });
     }
 
-    // Extract page counts from PDFs
+    // Extract page counts from PDFs and upload to Cloudinary
     let totalPages = 0;
     const fileRecords = [];
 
@@ -36,18 +35,21 @@ exports.createOrder = async (req, res) => {
       let pageCount = 1;
       if (file.mimetype === 'application/pdf') {
         try {
-          const pdfBytes = fs.readFileSync(file.path);
-          const pdfDoc = await PDFDocument.load(pdfBytes);
+          const pdfDoc = await PDFDocument.load(file.buffer);
           pageCount = pdfDoc.getPageCount();
         } catch (e) {
           console.warn('PDF page count failed for', file.originalname);
         }
       }
       totalPages += pageCount;
+
+      // Upload to Cloudinary
+      const cloudResult = await uploadToCloudinary(file.buffer, file.originalname);
+
       fileRecords.push({
         original_name: file.originalname,
-        stored_name: file.filename,
-        file_path: file.path,
+        stored_name: cloudResult.public_id,
+        file_path: cloudResult.url,
         file_size: file.size,
         mime_type: file.mimetype,
         page_count: pageCount,
@@ -393,11 +395,8 @@ exports.downloadFile = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized to access this file' });
     }
 
-    if (!fs.existsSync(file.file_path)) {
-      return res.status(404).json({ error: 'File physical record not found' });
-    }
-
-    res.download(file.file_path, file.original_name);
+    // Redirect to Cloudinary URL
+    res.redirect(file.file_path);
   } catch (err) {
     console.error('Download file error:', err);
     res.status(500).json({ error: 'Failed to download file' });
