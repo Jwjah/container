@@ -201,6 +201,39 @@ exports.getMe = async (req, res) => {
   }
 };
 
+// PUT /api/auth/me
+exports.updateMe = async (req, res) => {
+  try {
+    const { name, phone, hostel, room_number } = req.body;
+    
+    // Build update query dynamically
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (phone !== undefined) updates.phone = phone;
+    if (hostel !== undefined) updates.hostel = hostel;
+    if (room_number !== undefined) updates.room_number = room_number;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    const setClause = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const values = [...Object.values(updates), req.user.id];
+
+    await db.execute(`UPDATE users SET ${setClause} WHERE id = ?`, values);
+    
+    // Fetch updated user
+    const [users] = await db.execute(
+      'SELECT id, name, email, role, phone, avatar, hostel, room_number, is_verified, created_at FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    res.json({ message: 'Profile updated', user: users[0] });
+  } catch (err) {
+    console.error('UpdateMe error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
+
 // GET /api/auth/transactions — List wallet transactions
 exports.getTransactions = async (req, res) => {
   try {

@@ -284,7 +284,7 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={canUndo} canRedo={canRedo}
-        onExport={handleExport} onClose={onClose} exportLoading={exporting}
+        onExport={handleExport} onClose={onClose} onBack={handleExport} exportLoading={exporting}
         onSearch={() => setShowSearchModal(true)}
         showThumbnails={showThumbnails} setShowThumbnails={setShowThumbnails}
       />

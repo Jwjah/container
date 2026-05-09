@@ -8,6 +8,7 @@ router.post('/verify-otp', auth.verifyOTP);
 router.post('/login', auth.login);
 router.post('/resend-otp', auth.resendOTP);
 router.get('/me', authenticate, auth.getMe);
+router.put('/me', authenticate, auth.updateMe);
 router.get('/transactions', authenticate, auth.getTransactions);
 
 module.exports = router;

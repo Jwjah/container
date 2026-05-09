@@ -132,14 +132,9 @@ export default function QueuePage() {
                               style={{ padding: '4px 10px', fontSize: 11 }}
                               onClick={async () => {
                                 try {
-                                  const response = await api.get(`/orders/files/${file.id}/download`, { responseType: 'blob' });
-                                  const url = window.URL.createObjectURL(new Blob([response.data]));
-                                  const link = document.createElement('a');
-                                  link.href = url;
-                                  link.setAttribute('download', file.name);
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  link.remove();
+                                  const { data } = await api.get(`/orders/files/${file.id}/download`);
+                                  const downloadUrl = data.url.replace('/upload/', '/upload/fl_attachment/');
+                                  window.open(downloadUrl, '_blank');
                                 } catch (err) {
                                   toast.error('Failed to download file');
                                 }

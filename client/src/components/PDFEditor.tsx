@@ -383,7 +383,7 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
         onUndo={handleUndo}
         onRedo={handleRedo}
         canUndo={canUndo} canRedo={canRedo}
-        onExport={handleExport} onClose={onClose} exportLoading={exporting}
+        onExport={handleExport} onClose={onClose} onBack={handleExport} exportLoading={exporting}
         onSearch={() => setShowSearchModal(true)}
         onOcr={runOcrOnCurrentPage}
         showThumbnails={showThumbnails} setShowThumbnails={setShowThumbnails}

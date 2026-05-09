@@ -241,6 +241,8 @@ exports.wipeOperations = async (req, res) => {
       await db.execute('DELETE FROM order_files');
       await db.execute('DELETE FROM orders');
       await db.execute('DELETE FROM shops');
+      await db.execute('DELETE FROM transactions');
+      await db.execute('DELETE FROM otp_codes');
       await db.execute("DELETE FROM users WHERE role != 'admin'");
       res.json({ message: 'Factory reset complete' });
     } else {

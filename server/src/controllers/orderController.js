@@ -395,8 +395,8 @@ exports.downloadFile = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized to access this file' });
     }
 
-    // Redirect to Cloudinary URL
-    res.redirect(file.file_path);
+    // Return Cloudinary URL instead of redirecting to avoid CORS issues on the frontend
+    res.json({ url: file.file_path });
   } catch (err) {
     console.error('Download file error:', err);
     res.status(500).json({ error: 'Failed to download file' });

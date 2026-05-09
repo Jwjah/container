@@ -26,6 +26,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/student', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
     { href: '/student/new-order', icon: <HiOutlineDocumentText size={20} />, label: 'New Order' },
     { href: '/student/orders', icon: <HiOutlineShoppingBag size={20} />, label: 'My Orders' },
+    { href: '/student/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
   ],
   shop: [
     { href: '/shop', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
@@ -40,6 +41,8 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/agent/missions', icon: <HiOutlineTruck size={20} />, label: 'Missions' },
     { href: '/agent/scanner', icon: <HiOutlineQrcode size={20} />, label: 'QR Scanner' },
     { href: '/agent/earnings', icon: <HiOutlineCurrencyDollar size={20} />, label: 'Earnings' },
+    { href: '/agent/history', icon: <HiOutlineDocumentText size={20} />, label: 'History' },
+    { href: '/agent/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
   ],
   admin: [
     { href: '/admin', icon: <HiOutlineChartBar size={20} />, label: 'Analytics' },
@@ -56,6 +59,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [hoverNotifs, setHoverNotifs] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   useEffect(() => {
     loadUser();
@@ -69,10 +74,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (user) {
-      api.get('/admin/notifications').then(({ data }) => setNotifCount(data.unread)).catch(() => {});
-      const interval = setInterval(() => {
-        api.get('/admin/notifications').then(({ data }) => setNotifCount(data.unread)).catch(() => {});
-      }, 30000);
+      const fetchNotifs = () => {
+        api.get('/admin/notifications').then(({ data }) => {
+          setNotifCount(data.unread || 0);
+          setNotifications(data.notifications || []);
+        }).catch(() => {});
+      };
+      fetchNotifs();
+      const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -223,17 +232,58 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
           <div />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative' }}
+               onMouseEnter={() => setHoverNotifs(true)}
+               onMouseLeave={() => setHoverNotifs(false)}
+          >
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               className="btn btn-ghost btn-icon"
               style={{ position: 'relative' }}
-              onClick={() => router.push(`/${user.role}`)}
+              onClick={() => router.push(`/${user.role}/notifications`)}
             >
               <HiOutlineBell size={20} />
               <NotificationBadge count={notifCount} />
             </motion.button>
+            
+            <AnimatePresence>
+              {hoverNotifs && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  style={{
+                    position: 'absolute', top: '100%', right: 0, width: 320,
+                    background: 'var(--bg-card)', backdropFilter: 'blur(20px)',
+                    border: '1px solid var(--border)', borderRadius: 12,
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.3)', overflow: 'hidden',
+                    zIndex: 100
+                  }}
+                >
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h4 style={{ fontWeight: 600, fontSize: 14 }}>Notifications</h4>
+                    {notifCount > 0 && <span style={{ fontSize: 12, color: 'var(--primary-light)' }}>{notifCount} new</span>}
+                  </div>
+                  <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                    {notifications.length > 0 ? notifications.slice(0, 5).map((n: any) => (
+                      <div key={n.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)', background: n.is_read ? 'transparent' : 'var(--primary-glow)' }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{n.title}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{n.message}</div>
+                      </div>
+                    )) : (
+                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>No notifications</div>
+                    )}
+                  </div>
+                  <div 
+                    onClick={() => router.push(`/${user.role}/notifications`)}
+                    style={{ padding: '10px', textAlign: 'center', fontSize: 13, color: 'var(--primary-light)', cursor: 'pointer', background: 'var(--bg-tertiary)' }}
+                  >
+                    View All
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </motion.header>
 

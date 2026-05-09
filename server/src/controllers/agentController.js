@@ -241,8 +241,11 @@ exports.getEarnings = async (req, res) => {
     );
 
     res.json({
-      earnings: { total_earned: parseFloat(total_earned), total_deliveries },
-      recent,
+      earnings: { 
+        total_earned: parseFloat(total_earned), 
+        total_deliveries,
+        recent_transactions: recent
+      },
     });
   } catch (err) {
     console.error('Earnings error:', err);

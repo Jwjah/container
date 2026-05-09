@@ -60,6 +60,29 @@ export default function NewOrderPage() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const openEditor = (index: number) => {
+    window.history.pushState({ editorOpen: true }, '');
+    setEditingFileIndex(index);
+  };
+
+  const closeEditor = () => {
+    if (window.history.state?.editorOpen) {
+      window.history.back();
+    } else {
+      setEditingFileIndex(null);
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (editingFileIndex !== null) {
+        setEditingFileIndex(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [editingFileIndex]);
+
   const handleSubmit = async () => {
     if (!selectedShop || files.length === 0) {
       toast.error('Select a shop and upload files');
@@ -161,7 +184,7 @@ export default function NewOrderPage() {
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {(file.type.includes('pdf') || file.type.includes('image')) && (
-                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => setEditingFileIndex(i)} className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}>
+                          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => openEditor(i)} className="btn btn-ghost btn-icon" style={{ color: 'var(--primary)', padding: 4 }}>
                             <HiOutlinePencilAlt size={18} />
                           </motion.button>
                         )}
@@ -248,27 +271,27 @@ export default function NewOrderPage() {
             {files[editingFileIndex].type.includes('pdf') ? (
               <PDFEditor
                 file={files[editingFileIndex]}
-                onClose={() => setEditingFileIndex(null)}
+                onClose={closeEditor}
                 onSave={(newFile) => {
                   setFiles(prev => {
                     const newFiles = [...prev];
                     newFiles[editingFileIndex] = newFile;
                     return newFiles;
                   });
-                  setEditingFileIndex(null);
+                  closeEditor();
                 }}
               />
             ) : (
               <ImageEditor
                 file={files[editingFileIndex]}
-                onClose={() => setEditingFileIndex(null)}
+                onClose={closeEditor}
                 onSave={(newFile) => {
                   setFiles(prev => {
                     const newFiles = [...prev];
                     newFiles[editingFileIndex] = newFile;
                     return newFiles;
                   });
-                  setEditingFileIndex(null);
+                  closeEditor();
                 }}
               />
             )}
