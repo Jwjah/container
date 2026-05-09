@@ -243,7 +243,9 @@ exports.wipeOperations = async (req, res) => {
       await db.execute('DELETE FROM shops');
       await db.execute('DELETE FROM transactions');
       await db.execute('DELETE FROM otp_codes');
-      await db.execute("DELETE FROM users WHERE role != 'admin'");
+      // Protect the super admin email from .env
+      const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
+      await db.execute("DELETE FROM users WHERE email != ?", [adminEmail]);
       res.json({ message: 'Factory reset complete' });
     } else {
       res.status(400).json({ error: 'Invalid wipe target' });
