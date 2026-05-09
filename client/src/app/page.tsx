@@ -88,7 +88,7 @@ export default function LandingPage() {
                 fontSize: 13, color: 'var(--primary-light)', fontWeight: 500, marginBottom: 24,
               }}
             >
-              ✨ Campus printing, reimagined
+              ✨ The future of campus printing is here
             </motion.div>
 
             <h1 style={{
@@ -97,7 +97,7 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
-              Print. Track.<br />Deliver.
+              Your Campus.<br />Your Prints. Delivered.
             </h1>
 
             <motion.p
