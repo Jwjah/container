@@ -71,7 +71,18 @@ export default function LandingPage() {
       </motion.nav>
 
       {/* Hero */}
-      <section style={{ paddingTop: 160, paddingBottom: 100, textAlign: 'center' }}>
+      <section style={{ 
+        paddingTop: 160, paddingBottom: 100, textAlign: 'center', position: 'relative',
+        overflow: 'hidden' 
+      }}>
+        {/* Technical Grid Background */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundImage: 'radial-gradient(var(--border) 1px, transparent 1px)',
+          backgroundSize: '40px 40px', opacity: 0.4, maskImage: 'radial-gradient(circle at center, black, transparent 80%)',
+          zIndex: -1
+        }} />
+
         <div className="container">
           <motion.div
             initial={{ opacity: 0, y: 40 }}
@@ -83,17 +94,23 @@ export default function LandingPage() {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.6 }}
               style={{
-                display: 'inline-flex', padding: '6px 16px', borderRadius: 999,
+                display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 999,
                 background: 'var(--primary-glow)', border: '1px solid rgba(99,102,241,0.2)',
                 fontSize: 13, color: 'var(--primary-light)', fontWeight: 500, marginBottom: 24,
               }}
             >
+              <span style={{ 
+                width: 8, height: 8, borderRadius: '50%', background: 'var(--success)', 
+                boxShadow: '0 0 10px var(--success)',
+                display: 'inline-block',
+                animation: 'pulse 2s infinite'
+              }} />
               ✨ The future of campus printing is here
             </motion.div>
 
             <h1 style={{
-              fontSize: 'clamp(36px, 6vw, 72px)', fontWeight: 900, lineHeight: 1.1,
-              marginBottom: 24,
+              fontSize: 'clamp(40px, 7vw, 84px)', fontWeight: 900, lineHeight: 1.05,
+              marginBottom: 24, letterSpacing: '-0.03em',
               background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
