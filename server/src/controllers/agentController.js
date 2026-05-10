@@ -238,6 +238,7 @@ exports.verifyDelivery = async (req, res) => {
 // GET /api/agent/earnings — Agent earnings summary
 exports.getEarnings = async (req, res) => {
   try {
+    const agentId = parseInt(req.user.id);
     // FAIL-SAFE: Pull earnings from deliveries, but wallet from users
     const [earnRows] = await db.execute(
       `SELECT 
@@ -245,17 +246,19 @@ exports.getEarnings = async (req, res) => {
         (SELECT COUNT(*) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_deliveries,
         (SELECT wallet_balance FROM users WHERE id = ?) as current_wallet
       `,
-      [req.user.id, req.user.id, req.user.id]
+      [agentId, agentId, agentId]
     );
     const stats = earnRows[0] || { total_earned_deliveries: 0, total_deliveries: 0, current_wallet: 0 };
+    
     const [recent] = await db.execute(
-      `SELECT d.*, o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
+      `SELECT d.id as delivery_id, d.status, d.earnings, d.delivery_time, d.created_at as delivery_date,
+              o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
        FROM deliveries d 
        JOIN orders o ON d.order_id = o.id 
        JOIN shops s ON o.shop_id = s.id
        JOIN users u ON o.student_id = u.id
        WHERE d.agent_id = ? ORDER BY d.created_at DESC LIMIT 50`,
-      [req.user.id]
+      [agentId]
     );
 
     res.json({
