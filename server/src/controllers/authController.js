@@ -24,10 +24,23 @@ exports.register = async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 12);
+    
+    // Step 1: Insert with core fields that definitely exist
     const [result] = await db.execute(
-      'INSERT INTO users (name, email, password, role, phone, hostel, room_number) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, email, hash, role || 'student', phone || null, hostel || null, room_number || null]
+      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      [name, email, hash, role || 'student']
     );
+    const userId = result.insertId;
+
+    // Step 2: Attempt to update with extra fields (fails gracefully if columns are missing)
+    try {
+      await db.execute(
+        'UPDATE users SET phone = ?, hostel = ?, room_number = ? WHERE id = ?',
+        [phone || null, hostel || null, room_number || null, userId]
+      );
+    } catch (e) {
+      console.warn('Optional profile fields skipped: database columns not yet created.');
+    }
 
     // Generate and send OTP
     const otp = generateOTP();
@@ -141,8 +154,11 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        avatar: user.avatar,
-        hostel: user.hostel,
+        avatar: user.avatar || null,
+        // Safely access optional fields
+        phone: user.phone || null,
+        hostel: user.hostel || null,
+        room_number: user.room_number || null,
       },
     });
   } catch (err) {
