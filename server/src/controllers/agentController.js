@@ -242,6 +242,7 @@ exports.getEarnings = async (req, res) => {
       'SELECT COALESCE(SUM(earnings), 0) as total_earned, COUNT(*) as total_deliveries FROM deliveries WHERE agent_id = ? AND status = "delivered"',
       [req.user.id]
     );
+    const [[{ wallet_balance }]] = await db.execute('SELECT wallet_balance FROM users WHERE id = ?', [req.user.id]);
     const stats = earnRows[0] || { total_earned: 0, total_deliveries: 0 };
     const [recent] = await db.execute(
       `SELECT d.*, o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
@@ -255,7 +256,7 @@ exports.getEarnings = async (req, res) => {
 
     res.json({
       earnings: { 
-        total_earned: parseFloat(stats.total_earned || 0), 
+        total_earned: parseFloat(wallet_balance || 0), 
         total_deliveries: parseInt(stats.total_deliveries || 0) 
       },
       recent,

@@ -200,19 +200,13 @@ export default function OrdersPage() {
                         onClick={async () => {
                           try {
                             const { data } = await api.get(`/orders/files/${file.id}/download`);
-                            const link = document.createElement('a');
-                            link.href = data.url;
-                            link.setAttribute('download', file.name);
-                            link.setAttribute('target', '_blank');
-                            document.body.appendChild(link);
-                            link.click();
-                            link.remove();
+                            window.open(data.url, '_blank');
                           } catch (err) {
-                            toast.error('Failed to download file');
+                            toast.error('Failed to open file');
                           }
                         }}
                       >
-                        Download
+                        View / Download
                       </button>
                     </div>
                   ))}
