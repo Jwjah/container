@@ -220,6 +220,12 @@ exports.verifyDelivery = async (req, res) => {
         'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
         [req.user.id, 'credit', earning, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash, wallet_balance]
       );
+
+      // NOTIFY AGENT
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [req.user.id, '💰 Earnings Credited!', `You earned ₹${earning.toFixed(0)} for delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}.`, 'wallet']
+      );
     }
 
     res.json({ message: 'Delivery verified! Earnings credited.' });
@@ -232,14 +238,11 @@ exports.verifyDelivery = async (req, res) => {
 // GET /api/agent/earnings — Agent earnings summary
 exports.getEarnings = async (req, res) => {
   try {
-    const [[{ total_earned }]] = await db.execute(
-      'SELECT COALESCE(SUM(earnings), 0) as total_earned FROM deliveries WHERE agent_id = ? AND status = "delivered"',
+    const [earnRows] = await db.execute(
+      'SELECT COALESCE(SUM(earnings), 0) as total_earned, COUNT(*) as total_deliveries FROM deliveries WHERE agent_id = ? AND status = "delivered"',
       [req.user.id]
     );
-    const [[{ total_deliveries }]] = await db.execute(
-      'SELECT COUNT(*) as total_deliveries FROM deliveries WHERE agent_id = ? AND status = "delivered"',
-      [req.user.id]
-    );
+    const stats = earnRows[0] || { total_earned: 0, total_deliveries: 0 };
     const [recent] = await db.execute(
       `SELECT d.*, o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
        FROM deliveries d 
@@ -251,7 +254,10 @@ exports.getEarnings = async (req, res) => {
     );
 
     res.json({
-      earnings: { total_earned: parseFloat(total_earned), total_deliveries },
+      earnings: { 
+        total_earned: parseFloat(stats.total_earned || 0), 
+        total_deliveries: parseInt(stats.total_deliveries || 0) 
+      },
       recent,
     });
   } catch (err) {

@@ -351,6 +351,12 @@ exports.verifyDeliveryByStudent = async (req, res) => {
         'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
         [orders[0].agent_id, 'credit', earning, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash, wallet_balance]
       );
+
+      // NOTIFY AGENT
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [orders[0].agent_id, '✅ Delivery Confirmed!', `Student confirmed delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}. ₹${earning.toFixed(0)} credited.`, 'wallet']
+      );
     }
 
     // Mark order as delivered via internal logic
