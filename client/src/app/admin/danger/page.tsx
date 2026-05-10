@@ -74,6 +74,11 @@ export default function AdminDangerZone() {
             placeholder="Type 'I AM SURE' here"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && confirmText === 'I AM SURE' && !loading) {
+                executeWipe();
+              }
+            }}
             style={{ width: '100%', marginBottom: 24, textAlign: 'center', fontWeight: 800 }}
           />
 

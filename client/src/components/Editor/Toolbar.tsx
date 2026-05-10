@@ -85,14 +85,26 @@ export default function Toolbar({
         background: '#fff', borderBottom: '1px solid #e5e7eb', height: '52px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px',
       }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '160px' }}>
-          <div style={{
-            width: '30px', height: '30px', background: 'linear-gradient(135deg,#D2294B,#a01e38)',
-            borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 900, fontSize: '12px', letterSpacing: '-0.5px',
-          }}>CP</div>
-          <span style={{ fontWeight: 800, color: '#D2294B', fontSize: '15px', letterSpacing: '-0.4px' }}>campus print</span>
+        {/* Back and Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '160px' }}>
+          <button
+            onClick={onExport}
+            disabled={exportLoading}
+            style={{
+              background: 'none', border: 'none', cursor: exportLoading ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', color: '#6b7280'
+            }}
+            title="Save and Go Back"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '30px', height: '30px', background: 'linear-gradient(135deg,#D2294B,#a01e38)',
+              borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 900, fontSize: '12px', letterSpacing: '-0.5px',
+            }}>CP</div>
+            <span style={{ fontWeight: 800, color: '#D2294B', fontSize: '15px', letterSpacing: '-0.4px' }}>campus print</span>
+          </div>
         </div>
 
         {/* Filename */}
@@ -127,7 +139,7 @@ export default function Toolbar({
           {[
             { icon: <Ico.Search />, label: 'Search', onClick: onSearch },
             { icon: <Ico.Print />,  label: 'Print',  onClick: () => window.print?.() },
-            { icon: <Ico.Download />, label: 'Download', onClick: onExport, disabled: exportLoading },
+            { icon: <Ico.Download />, label: 'Save Edits', onClick: onExport, disabled: exportLoading },
           ].map(btn => (
             <button
               key={btn.label}
@@ -139,7 +151,7 @@ export default function Toolbar({
                 color: '#6b7280', borderRadius: '8px', opacity: btn.disabled ? 0.5 : 1,
               }}
             >
-              {btn.label === 'Download' && exportLoading
+              {btn.label === 'Save Edits' && exportLoading
                 ? <div style={{ width: '18px', height: '18px', border: '2px solid #e5e7eb', borderTopColor: '#D2294B', borderRadius: '50%', animation: 'pg-spin 0.8s linear infinite' }} />
                 : btn.icon}
               <span style={{ fontSize: '10px', fontWeight: 600 }}>{btn.label}</span>
@@ -158,11 +170,24 @@ export default function Toolbar({
             onClick={onClose}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 16px',
-              background: '#D2294B', border: 'none', borderRadius: '8px',
-              color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer', marginLeft: '4px',
+              background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: '8px',
+              color: '#374151', fontWeight: 600, fontSize: '13px', cursor: 'pointer', marginLeft: '4px',
             }}
           >
-            <Ico.DoneCheck /><span>Done</span>
+            <Ico.Cross /><span>Cancel</span>
+          </button>
+          
+          <button
+            onClick={onExport}
+            disabled={exportLoading}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 16px',
+              background: '#D2294B', border: 'none', borderRadius: '8px',
+              color: '#fff', fontWeight: 700, fontSize: '13px', cursor: exportLoading ? 'wait' : 'pointer', marginLeft: '4px',
+              opacity: exportLoading ? 0.7 : 1,
+            }}
+          >
+            <Ico.DoneCheck /><span>{exportLoading ? 'Saving...' : 'Done'}</span>
           </button>
         </div>
       </div>

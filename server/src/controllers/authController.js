@@ -200,6 +200,20 @@ exports.getMe = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 };
+// PATCH /api/users/profile — Update user profile
+exports.updateProfile = async (req, res) => {
+  try {
+    const { name, phone, hostel, room_number } = req.body;
+    await db.execute(
+      'UPDATE users SET name = ?, phone = ?, hostel = ?, room_number = ? WHERE id = ?',
+      [name, phone, hostel || null, room_number || null, req.user.id]
+    );
+    res.json({ message: 'Profile updated successfully' });
+  } catch (err) {
+    console.error('UpdateProfile error:', err);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+};
 
 // GET /api/auth/transactions — List wallet transactions
 exports.getTransactions = async (req, res) => {

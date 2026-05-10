@@ -26,26 +26,33 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/student', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
     { href: '/student/new-order', icon: <HiOutlineDocumentText size={20} />, label: 'New Order' },
     { href: '/student/orders', icon: <HiOutlineShoppingBag size={20} />, label: 'My Orders' },
+    { href: '/student/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
+    { href: '/student/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
   ],
   shop: [
     { href: '/shop', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
     { href: '/shop/queue', icon: <HiOutlineDocumentText size={20} />, label: 'Print Queue' },
     { href: '/shop/history', icon: <HiOutlineClock size={20} />, label: 'History' },
     { href: '/shop/wallet', icon: <HiOutlineCurrencyDollar size={20} />, label: 'Wallet' },
+    { href: '/shop/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/shop/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
   ],
   agent: [
     { href: '/agent', icon: <HiOutlineHome size={20} />, label: 'Dashboard' },
     { href: '/agent/radar', icon: <HiOutlineLocationMarker size={20} />, label: 'Gig Radar' },
     { href: '/agent/missions', icon: <HiOutlineTruck size={20} />, label: 'Missions' },
+    { href: '/agent/history', icon: <HiOutlineClock size={20} />, label: 'History' },
     { href: '/agent/scanner', icon: <HiOutlineQrcode size={20} />, label: 'QR Scanner' },
     { href: '/agent/earnings', icon: <HiOutlineCurrencyDollar size={20} />, label: 'Earnings' },
+    { href: '/agent/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
+    { href: '/agent/settings', icon: <HiOutlineCog size={20} />, label: 'Settings' },
   ],
   admin: [
     { href: '/admin', icon: <HiOutlineChartBar size={20} />, label: 'Analytics' },
     { href: '/admin/users', icon: <HiOutlineUserGroup size={20} />, label: 'Users' },
     { href: '/admin/shops', icon: <HiOutlineShoppingBag size={20} />, label: 'Shops' },
     { href: '/admin/orders', icon: <HiOutlineDocumentText size={20} />, label: 'Orders' },
+    { href: '/admin/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/admin/danger', icon: <HiOutlineCog size={20} />, label: 'Danger Zone' },
   ],
 };
@@ -56,6 +63,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -69,10 +78,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (user) {
-      api.get('/admin/notifications').then(({ data }) => setNotifCount(data.unread)).catch(() => {});
-      const interval = setInterval(() => {
-        api.get('/admin/notifications').then(({ data }) => setNotifCount(data.unread)).catch(() => {});
-      }, 30000);
+      const fetchNotifs = () => {
+        api.get('/admin/notifications').then(({ data }) => {
+          setNotifCount(data.unread);
+          setNotifications(data.notifications || []);
+        }).catch(() => {});
+      };
+      fetchNotifs();
+      const interval = setInterval(fetchNotifs, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -224,16 +237,54 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="btn btn-ghost btn-icon"
+            <div 
               style={{ position: 'relative' }}
-              onClick={() => router.push(`/${user.role}`)}
+              onMouseEnter={() => setShowNotifDropdown(true)}
+              onMouseLeave={() => setShowNotifDropdown(false)}
             >
-              <HiOutlineBell size={20} />
-              <NotificationBadge count={notifCount} />
-            </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="btn btn-ghost btn-icon"
+                onClick={() => router.push(`/${user.role}/notifications`)}
+              >
+                <HiOutlineBell size={20} />
+                <NotificationBadge count={notifCount} />
+              </motion.button>
+              
+              <AnimatePresence>
+                {showNotifDropdown && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    style={{
+                      position: 'absolute', right: 0, top: '100%', width: '300px',
+                      background: 'rgba(5, 5, 16, 0.95)', backdropFilter: 'blur(10px)',
+                      border: '1px solid var(--border)', borderRadius: '12px',
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.5)', padding: '12px', zIndex: 100,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600 }}>Notifications</span>
+                      <span style={{ fontSize: '12px', color: 'var(--primary)', cursor: 'pointer' }} onClick={() => router.push(`/${user.role}/notifications`)}>View All</span>
+                    </div>
+                    {notifications.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '300px', overflowY: 'auto' }}>
+                        {notifications.slice(0, 5).map((n: any) => (
+                          <div key={n.id} style={{ padding: '8px', background: n.is_read ? 'transparent' : 'rgba(210, 41, 75, 0.1)', borderRadius: '8px' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>{n.title}</div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{n.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ padding: '16px', textAlign: 'center', fontSize: '13px', color: 'var(--text-tertiary)' }}>No recent notifications</div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </motion.header>
 
