@@ -97,7 +97,7 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
-              Smartttttttt Printing.<br />Zero Waiting.
+              Smartttttttt Printing.<br />ZeroOOOOO Waiting.
             </h1>
 
             <motion.p
