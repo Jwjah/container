@@ -41,6 +41,21 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), env: process.env.NODE_ENV });
 });
 
+// Auto-run schema sync on startup
+const syncSchema = async () => {
+  const db = require('./config/database');
+  const columns = ['phone', 'hostel', 'room_number'];
+  for (const col of columns) {
+    try {
+      await db.execute(`ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT NULL`);
+      console.log(`  ✅ Added missing column: ${col}`);
+    } catch (e) {
+      // Column already exists, ignore
+    }
+  }
+};
+syncSchema().catch(err => console.error('  ❌ Schema sync failed:', err.message));
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('❌ Server Error:', err);
