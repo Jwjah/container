@@ -234,8 +234,10 @@ exports.wipeOperations = async (req, res) => {
       await db.execute('DELETE FROM deliveries');
       await db.execute('DELETE FROM order_files');
       await db.execute('DELETE FROM orders');
+      await db.execute('DELETE FROM notifications WHERE type = "order" OR type = "delivery"');
       res.json({ message: 'All orders wiped' });
     } else if (target === 'all') {
+      // Order matters due to foreign keys
       await db.execute('DELETE FROM notifications');
       await db.execute('DELETE FROM deliveries');
       await db.execute('DELETE FROM order_files');
@@ -243,10 +245,9 @@ exports.wipeOperations = async (req, res) => {
       await db.execute('DELETE FROM shops');
       await db.execute('DELETE FROM transactions');
       await db.execute('DELETE FROM otp_codes');
-      await db.execute('DELETE FROM notifications');
       
       const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
-      await db.execute("DELETE FROM users WHERE email != ?", [adminEmail]);
+      await db.execute("DELETE FROM users WHERE role != 'admin' AND email != ?", [adminEmail]);
       res.json({ message: 'Factory reset complete' });
     } else {
       res.status(400).json({ error: 'Invalid wipe target' });

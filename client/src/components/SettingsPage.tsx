@@ -73,26 +73,26 @@ export default function SettingsPage() {
             />
           </div>
 
-          {user.role === 'student' && (
+          {(user.role === 'student' || user.role === 'agent') && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
               <div className="input-group">
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <HiOutlineHome size={16} /> Hostel
+                  <HiOutlineHome size={16} /> {user.role === 'student' ? 'Hostel' : 'Base Location'}
                 </label>
                 <input
                   className="input"
                   value={formData.hostel}
                   onChange={e => setFormData({ ...formData, hostel: e.target.value })}
-                  placeholder="Hostel Name"
+                  placeholder={user.role === 'student' ? 'Hostel Name' : 'e.g. Hostel 1'}
                 />
               </div>
               <div className="input-group">
-                <label>Room Number</label>
+                <label>{user.role === 'student' ? 'Room Number' : 'Reference'}</label>
                 <input
                   className="input"
                   value={formData.room_number}
                   onChange={e => setFormData({ ...formData, room_number: e.target.value })}
-                  placeholder="Room No."
+                  placeholder={user.role === 'student' ? 'Room No.' : 'e.g. Block A'}
                 />
               </div>
             </div>

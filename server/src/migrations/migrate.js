@@ -264,7 +264,8 @@ const migrate = async () => {
   const alterQueries = [
     `ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL`,
     `ALTER TABLE users ADD COLUMN hostel TEXT DEFAULT NULL`,
-    `ALTER TABLE users ADD COLUMN room_number TEXT DEFAULT NULL`
+    `ALTER TABLE users ADD COLUMN room_number TEXT DEFAULT NULL`,
+    `ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 0.00`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) {} // Ignore if column already exists

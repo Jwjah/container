@@ -133,7 +133,13 @@ export default function QueuePage() {
                               onClick={async () => {
                                 try {
                                   const { data } = await api.get(`/orders/files/${file.id}/download`);
-                                  window.open(data.url, '_blank');
+                                  const link = document.createElement('a');
+                                  link.href = data.url;
+                                  link.setAttribute('download', file.name);
+                                  link.setAttribute('target', '_blank');
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  link.remove();
                                 } catch (err) {
                                   toast.error('Failed to download file');
                                 }

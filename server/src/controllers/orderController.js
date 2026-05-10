@@ -342,9 +342,14 @@ exports.verifyDeliveryByStudent = async (req, res) => {
     // Credit agent wallet
     const [deliveries] = await db.execute('SELECT earnings FROM deliveries WHERE order_id = ? AND agent_id = ?', [id, orders[0].agent_id]);
     if (deliveries.length) {
+      const earning = parseFloat(deliveries[0].earnings);
+      await db.execute('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [earning, orders[0].agent_id]);
+      
+      const [[{ wallet_balance }]] = await db.execute('SELECT wallet_balance FROM users WHERE id = ?', [orders[0].agent_id]);
+      
       await db.execute(
-        'INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
-        [orders[0].agent_id, 'credit', deliveries[0].earnings, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash]
+        'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
+        [orders[0].agent_id, 'credit', earning, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash, wallet_balance]
       );
     }
 
@@ -395,8 +400,9 @@ exports.downloadFile = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized to access this file' });
     }
 
-    // Return URL instead of redirecting to avoid CORS errors with blob fetching
-    res.json({ url: file.file_path });
+    // Return full URL to ensure browser can find the file across domains
+    const baseUrl = (process.env.API_URL || '').replace('/api', '');
+    res.json({ url: `${baseUrl}${file.file_path}` });
   } catch (err) {
     console.error('Download file error:', err);
     res.status(500).json({ error: 'Failed to download file' });

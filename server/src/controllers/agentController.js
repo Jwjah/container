@@ -211,9 +211,14 @@ exports.verifyDelivery = async (req, res) => {
     // Credit agent wallet
     const [deliveries] = await db.execute('SELECT earnings FROM deliveries WHERE order_id = ? AND agent_id = ?', [orderId, req.user.id]);
     if (deliveries.length) {
+      const earning = parseFloat(deliveries[0].earnings);
+      await db.execute('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?', [earning, req.user.id]);
+      
+      const [[{ wallet_balance }]] = await db.execute('SELECT wallet_balance FROM users WHERE id = ?', [req.user.id]);
+      
       await db.execute(
-        'INSERT INTO transactions (user_id, type, amount, description, reference_id) VALUES (?, ?, ?, ?, ?)',
-        [req.user.id, 'credit', deliveries[0].earnings, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash]
+        'INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, 'credit', earning, `Delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}`, orders[0].order_hash, wallet_balance]
       );
     }
 
@@ -236,7 +241,12 @@ exports.getEarnings = async (req, res) => {
       [req.user.id]
     );
     const [recent] = await db.execute(
-      'SELECT d.*, o.order_hash FROM deliveries d JOIN orders o ON d.order_id = o.id WHERE d.agent_id = ? ORDER BY d.created_at DESC LIMIT 10',
+      `SELECT d.*, o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
+       FROM deliveries d 
+       JOIN orders o ON d.order_id = o.id 
+       JOIN shops s ON o.shop_id = s.id
+       JOIN users u ON o.student_id = u.id
+       WHERE d.agent_id = ? ORDER BY d.created_at DESC LIMIT 50`,
       [req.user.id]
     );
 
