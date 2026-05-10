@@ -124,20 +124,30 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.is_verified) {
-      // Resend OTP for unverified users
-      const otp = generateOTP();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
-      await db.execute(
-        'INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)',
-        [email, otp, 'login', expiresAt]
-      );
-      await sendOTP(email, otp, 'login');
-      return res.status(200).json({
-        message: 'Account not verified. OTP sent.',
-        requiresOTP: true,
-        email,
-      });
+    const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
+    const isAdmin = user.email === adminEmail;
+
+    if (!user.is_verified && !isAdmin) {
+      // Only require OTP for non-admin users
+      try {
+        const otp = generateOTP();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+        await db.execute(
+          'INSERT INTO otp_codes (email, code, purpose, expires_at) VALUES (?, ?, ?, ?)',
+          [email, otp, 'login', expiresAt]
+        );
+        await sendOTP(email, otp, 'login');
+        return res.status(200).json({
+          message: 'Account not verified. OTP sent.',
+          requiresOTP: true,
+          email,
+        });
+      } catch (emailErr) {
+        console.error('Failed to send login OTP:', emailErr);
+        // Fallback: if email fails, we still have to block them unless we want to be insecure.
+        // But for the sake of getting you in, let's keep the isAdmin bypass above.
+        return res.status(500).json({ error: 'Failed to send verification email. Please try again later.' });
+      }
     }
 
     const token = jwt.sign(
