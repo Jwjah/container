@@ -124,8 +124,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
-    const isAdmin = user.email === adminEmail;
+    const isAdmin = user.role === 'admin';
 
     if (!user.is_verified && !isAdmin) {
       // Only require OTP for non-admin users
@@ -156,9 +155,8 @@ exports.login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    // Force verify admin account if it matches the env email
-    const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
-    if (user.email === adminEmail && !user.is_verified) {
+    // Force verify admin account
+    if (isAdmin && !user.is_verified) {
         await db.execute('UPDATE users SET is_verified = 1 WHERE id = ?', [user.id]);
         user.is_verified = 1;
     }
