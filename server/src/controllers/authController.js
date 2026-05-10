@@ -142,9 +142,16 @@ exports.login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
+      process.env.JWT_SECRET || 'campus_print_secret_fallback_123',
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
+
+    // Force verify admin account if it matches the env email
+    const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
+    if (user.email === adminEmail && !user.is_verified) {
+        await db.execute('UPDATE users SET is_verified = 1 WHERE id = ?', [user.id]);
+        user.is_verified = 1;
+    }
 
     res.json({
       message: 'Login successful',
