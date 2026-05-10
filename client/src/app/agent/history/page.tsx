@@ -12,8 +12,7 @@ export default function AgentHistoryPage() {
 
   useEffect(() => {
     api.get('/agent/earnings').then(({ data }) => {
-      // Filter for delivered ones if not already filtered
-      setHistory(data.recent?.filter((h: any) => h.status === 'delivered') || []);
+      setHistory(data.recent || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 

@@ -238,12 +238,16 @@ exports.verifyDelivery = async (req, res) => {
 // GET /api/agent/earnings — Agent earnings summary
 exports.getEarnings = async (req, res) => {
   try {
+    // FAIL-SAFE: Pull earnings from deliveries, but wallet from users
     const [earnRows] = await db.execute(
-      'SELECT COALESCE(SUM(earnings), 0) as total_earned, COUNT(*) as total_deliveries FROM deliveries WHERE agent_id = ? AND status = "delivered"',
-      [req.user.id]
+      `SELECT 
+        (SELECT COALESCE(SUM(earnings), 0) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_earned_deliveries,
+        (SELECT COUNT(*) FROM deliveries WHERE agent_id = ? AND status = 'delivered') as total_deliveries,
+        (SELECT wallet_balance FROM users WHERE id = ?) as current_wallet
+      `,
+      [req.user.id, req.user.id, req.user.id]
     );
-    const [[{ wallet_balance }]] = await db.execute('SELECT wallet_balance FROM users WHERE id = ?', [req.user.id]);
-    const stats = earnRows[0] || { total_earned: 0, total_deliveries: 0 };
+    const stats = earnRows[0] || { total_earned_deliveries: 0, total_deliveries: 0, current_wallet: 0 };
     const [recent] = await db.execute(
       `SELECT d.*, o.order_hash, o.hostel_address, s.shop_name, u.name as student_name, u.hostel, u.room_number
        FROM deliveries d 
@@ -256,7 +260,7 @@ exports.getEarnings = async (req, res) => {
 
     res.json({
       earnings: { 
-        total_earned: parseFloat(wallet_balance || 0), 
+        total_earned: parseFloat(stats.current_wallet || stats.total_earned_deliveries || 0), 
         total_deliveries: parseInt(stats.total_deliveries || 0) 
       },
       recent,
