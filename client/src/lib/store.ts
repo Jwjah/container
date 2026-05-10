@@ -7,7 +7,9 @@ interface User {
   email: string;
   role: 'student' | 'shop' | 'agent' | 'admin';
   avatar?: string;
+  phone?: string;
   hostel?: string;
+  room_number?: string;
 }
 
 interface AuthState {
