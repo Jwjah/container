@@ -259,6 +259,16 @@ const migrate = async () => {
       console.error('  ❌ Migration error:', err.message);
     }
   }
+  
+  // Ensure new columns exist for existing databases
+  const alterQueries = [
+    `ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL`,
+    `ALTER TABLE users ADD COLUMN hostel TEXT DEFAULT NULL`,
+    `ALTER TABLE users ADD COLUMN room_number TEXT DEFAULT NULL`
+  ];
+  for (const q of alterQueries) {
+    try { await db.execute(q); } catch (e) {} // Ignore if column already exists
+  }
 
   // Seed super admin
   try {

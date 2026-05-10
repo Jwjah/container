@@ -97,7 +97,7 @@ export default function LandingPage() {
               background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
             }}>
-              Print. Track.<br />Deliver.
+              Cloud Print.<br />Instant Pickup.
             </h1>
 
             <motion.p
@@ -109,8 +109,8 @@ export default function LandingPage() {
                 margin: '0 auto 40px', lineHeight: 1.7,
               }}
             >
-              Upload your documents, pick a nearby shop, customize your print,
-              and get it delivered to your hostel — all in minutes.
+              The ultimate campus printing solution. Upload your documents, 
+              pick a nearby shop, and get your prints instantly — no more long queues.
             </motion.p>
 
             <motion.div
