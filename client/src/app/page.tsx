@@ -85,19 +85,21 @@ export default function LandingPage() {
               style={{
                 display: 'inline-flex', padding: '6px 16px', borderRadius: 999,
                 background: 'var(--primary-glow)', border: '1px solid rgba(99,102,241,0.2)',
-                fontSize: 13, color: 'var(--primary-light)', fontWeight: 500, marginBottom: 24,
+                fontSize: 13, color: 'var(--primary-light)', fontWeight: 600, marginBottom: 24,
+                letterSpacing: '0.05em', textTransform: 'uppercase',
               }}
             >
-              ✨ Campus printing, reimagined
+              ⚡ Now with Ultra-Fast Local Agent Support
             </motion.div>
 
             <h1 style={{
               fontSize: 'clamp(36px, 6vw, 72px)', fontWeight: 900, lineHeight: 1.1,
               marginBottom: 24,
-              background: 'linear-gradient(135deg, #f1f5f9 0%, #94a3b8 50%, #6366f1 100%)',
+              background: 'linear-gradient(135deg, #ffffff 0%, #a5b4fc 50%, #6366f1 100%)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+              letterSpacing: '-0.02em',
             }}>
-              Smartttttttt Printinggg.<br />ZeroOOOOO Waiting.
+              Instant Print Queue.<br />Zero Lines. Absolute Speed.
             </h1>
 
             <motion.p
@@ -105,12 +107,12 @@ export default function LandingPage() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.6 }}
               style={{
-                fontSize: 18, color: 'var(--text-secondary)', maxWidth: 520,
+                fontSize: 18, color: 'var(--text-secondary)', maxWidth: 580,
                 margin: '0 auto 40px', lineHeight: 1.7,
               }}
             >
-              The fastest way to print on campus. Upload your documents, 
-              pick a nearby shop, and get your prints instantly — no more long queues.
+              The next-generation campus printing ecosystem. Send PDFs straight from your phone, 
+              our smart desktop print-agent handles the queue, and you pick up instantly—or get it delivered.
             </motion.p>
 
             <motion.div
