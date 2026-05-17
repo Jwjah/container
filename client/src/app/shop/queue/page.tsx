@@ -38,6 +38,17 @@ export default function QueuePage() {
     }
   };
 
+  const triggerPrint = async (orderId: number, shopId: number) => {
+    try {
+      await api.post(`/shops/${shopId}/trigger-print`, { orderId });
+      toast.success('🖨️ Sending to local printer...');
+      loadOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to print');
+    }
+  };
+
+
   const filteredOrders = orders.filter(o => o.status === tab);
   const counts = statusFlow.reduce((acc, s) => ({ ...acc, [s]: orders.filter(o => o.status === s).length }), {} as Record<string, number>);
 
@@ -153,14 +164,26 @@ export default function QueuePage() {
                         ✕ Reject
                       </TapButton>
                     )}
+                    
+                    {(order.status === 'pending' || order.status === 'confirmed') && (
+                      <TapButton 
+                        className="btn btn-primary btn-sm" 
+                        style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)', boxShadow: '0 4px 15px rgba(236, 72, 153, 0.4)' }}
+                        onClick={() => triggerPrint(order.id, order.shop_id)}
+                      >
+                        🖨️ ONE-CLICK PRINT
+                      </TapButton>
+                    )}
+
                     {order.status === 'ready' && (
                       <TapButton className="btn btn-secondary btn-sm" onClick={() => setQrModalOrder(order)}>
                         📱 View QR
                       </TapButton>
                     )}
-                    {nextStatus[order.status] && order.status !== 'ready' && (
-                      <TapButton className="btn btn-primary btn-sm" onClick={() => updateStatus(order.id, nextStatus[order.status])}>
-                        → {statusLabels[nextStatus[order.status]]}
+
+                    {order.status === 'printing' && (
+                      <TapButton className="btn btn-success btn-sm" onClick={() => updateStatus(order.id, 'ready')}>
+                        ✅ Mark as Ready
                       </TapButton>
                     )}
                   </div>

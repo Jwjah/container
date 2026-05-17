@@ -10,5 +10,7 @@ router.patch('/toggle', authenticate, authorize('shop', 'admin', 'student'), sho
 router.patch('/pricing', authenticate, authorize('shop', 'admin', 'student'), shops.updatePricing);
 router.get('/:id/stats', authenticate, authorize('shop', 'admin', 'student'), shops.getShopStats);
 router.put('/:id', authenticate, authorize('shop', 'admin', 'student'), shops.updateShop);
+router.post('/:id/trigger-print', authenticate, authorize('shop'), shops.triggerPrint);
+router.get('/:id/poll-print', authenticate, authorize('shop'), shops.pollPrintJobs);
 
 module.exports = router;

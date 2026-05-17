@@ -1,5 +1,9 @@
 const db = require('../config/database');
 
+// Simple in-memory queue for print jobs. 
+// Keys are shop_ids, values are arrays of print jobs.
+const printQueue = {};
+
 // POST /api/shops — Register a new shop
 exports.createShop = async (req, res) => {
   try {
@@ -147,3 +151,68 @@ exports.updateShop = async (req, res) => {
     res.status(500).json({ error: 'Failed to update shop' });
   }
 };
+
+// POST /api/shops/:id/trigger-print — Add order to print queue
+exports.triggerPrint = async (req, res) => {
+  try {
+    const shopId = req.params.id;
+    const { orderId } = req.body;
+
+    // Verify shop belongs to user
+    const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND user_id = ?', [shopId, req.user.id]);
+    if (!shops.length) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Get order files
+    const [files] = await db.execute('SELECT * FROM order_files WHERE order_id = ?', [orderId]);
+    if (!files.length) {
+      return res.status(404).json({ error: 'No files found for this order' });
+    }
+
+    if (!printQueue[shopId]) {
+      printQueue[shopId] = [];
+    }
+
+    // Add each file to the queue
+    for (const file of files) {
+      printQueue[shopId].push({
+        orderId,
+        fileId: file.id,
+        fileName: file.original_name,
+        fileUrl: file.file_path, // Cloudinary URL
+      });
+    }
+
+    // Also update order status to printing
+    await db.execute("UPDATE orders SET status = 'printing' WHERE id = ?", [orderId]);
+
+    res.json({ message: 'Print job sent to local agent!' });
+  } catch (err) {
+    console.error('Trigger print error:', err);
+    res.status(500).json({ error: 'Failed to trigger print' });
+  }
+};
+
+// GET /api/shops/:id/poll-print — Local agent polls this
+exports.pollPrintJobs = async (req, res) => {
+  try {
+    const shopId = req.params.id;
+    
+    // In a real app, you'd use a dedicated agent token. For simplicity, 
+    // we use the shop owner's JWT token to authenticate the agent.
+    const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND user_id = ?', [shopId, req.user.id]);
+    if (!shops.length) {
+      return res.status(403).json({ error: 'Unauthorized agent' });
+    }
+
+    const jobs = printQueue[shopId] || [];
+    printQueue[shopId] = []; // Clear queue after fetching
+
+    res.json({ jobs });
+  } catch (err) {
+    console.error('Poll print error:', err);
+    res.status(500).json({ error: 'Failed to poll print jobs' });
+  }
+};
+
