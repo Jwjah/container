@@ -20,11 +20,28 @@ export default function QueuePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [qrModalOrder, setQrModalOrder] = useState<any>(null);
+  const [agentCommand, setAgentCommand] = useState('');
 
   const loadOrders = (background = false) => {
     if (!background) setLoading(true);
     api.get('/orders').then(({ data }) => setOrders(data.orders || [])).catch(() => {}).finally(() => setLoading(false));
   };
+
+  useEffect(() => {
+    // Generate the terminal run command automatically using their active browser token
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token') || '';
+      api.get('/shops/my')
+        .then(({ data }) => {
+          const shopId = data.shop?.id || '1';
+          // Using a public proxy or fallback for local development url
+          const devUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : 'https://container-ruby.vercel.app/api'; 
+          setAgentCommand(`API_BASE_URL=${devUrl} SHOP_ID=${shopId} AUTH_TOKEN=${token} node agent.js`);
+        })
+        .catch(() => {});
+    }
+  }, []);
+
 
   useEffect(() => { loadOrders(); const i = setInterval(() => loadOrders(true), 3000); return () => clearInterval(i); }, []);
 
@@ -193,6 +210,35 @@ export default function QueuePage() {
           </StaggerContainer>
         </AnimatePresence>
       )}
+
+      {/* Local Agent Helper Box */}
+      {agentCommand && (
+        <div className="glass-card" style={{ marginTop: 40, padding: 24, border: '1px dashed var(--primary)' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            🔌 Connect Local Print Agent
+          </h3>
+          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+            Run this single command in your Mac terminal inside the <code>print-agent</code> folder to connect your physical printer:
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input 
+              readOnly 
+              value={agentCommand} 
+              style={{ flex: 1, padding: '10px 12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 11 }}
+            />
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                navigator.clipboard.writeText(agentCommand);
+                toast.success('📋 Command copied to clipboard!');
+              }}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {/* QR Display Modal for Shop */}
       <ModalOverlay isOpen={!!qrModalOrder} onClose={() => setQrModalOrder(null)}>

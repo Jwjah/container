@@ -5,7 +5,7 @@ const { exec } = require('child_process');
 
 // Configuration
 // In a real scenario, the shop owner enters these once and they are saved.
-const API_BASE_URL = 'http://localhost:5000/api'; // Or your deployed backend URL
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:5000/api';
 const SHOP_ID = process.env.SHOP_ID || '1';
 const AUTH_TOKEN = process.env.AUTH_TOKEN || 'YOUR_SHOP_OWNER_JWT_TOKEN_HERE';
 
