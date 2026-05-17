@@ -90,65 +90,85 @@ function runInteractiveSetup() {
     output: process.stdout
   });
 
+// First-time setup using direct login
+function runInteractiveSetup() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
   console.log('\n==========================================');
   console.log('   🏪 PFM PRINT AGENT: FIRST TIME SETUP   ');
   console.log('==========================================');
-  console.log('Enter your shop manager credentials to connect this printer.\n');
+  console.log('Enter your shop manager credentials and server URL to connect this printer.\n');
 
-  rl.question('📧 Shop Email: ', (email) => {
-    // Hide password characters in console if possible, otherwise simple input
-    rl.question('🔑 Password: ', async (password) => {
-      rl.close();
-      console.log('\n⏳ Authenticating with PFM Server...');
+  rl.question(`📡 API Server URL [default: ${API_BASE_URL}]: `, (apiUrlInput) => {
+    const resolvedApiUrl = apiUrlInput.trim() || API_BASE_URL;
 
-      try {
-        // Step 1: Login to get token
-        const loginRes = await axios.post(`${API_BASE_URL}/auth/login`, {
-          email: email.trim(),
-          password: password.trim()
-        });
+    rl.question('📧 Shop Email: ', (email) => {
+      rl.question('🔑 Password: ', async (password) => {
+        rl.close();
+        console.log('\n⏳ Authenticating with PFM Server...');
 
-        const token = loginRes.data.token;
+        try {
+          // Step 1: Login to get token
+          const loginRes = await axios.post(`${resolvedApiUrl}/auth/login`, {
+            email: email.trim(),
+            password: password.trim()
+          });
 
-        // Step 2: Fetch profile to discover Shop ID automatically
-        console.log('🏪 Fetching Shop profile details...');
-        const profileRes = await axios.get(`${API_BASE_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+          const token = loginRes.data.token;
 
-        const user = profileRes.data.user;
-        const shop = profileRes.data.shop;
+          // Step 2: Fetch profile to discover Shop ID automatically
+          console.log('🏪 Fetching Shop profile details...');
+          const profileRes = await axios.get(`${resolvedApiUrl}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
 
-        if (user.role !== 'shop' || !shop) {
-          console.error('❌ Authentication failed: This account does not own a registered shop.');
-          return;
+          const user = profileRes.data.user;
+          const shop = profileRes.data.shop;
+
+          if (user.role !== 'shop' || !shop) {
+            console.error('❌ Authentication failed: This account does not own a registered shop.');
+            return;
+          }
+
+          // Save config
+          const config = {
+            API_BASE_URL: resolvedApiUrl,
+            SHOP_ID: String(shop.id),
+            AUTH_TOKEN: token
+          };
+
+          fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+          console.log('✅ Configuration successfully saved!');
+          
+          API_BASE_URL = config.API_BASE_URL;
+          SHOP_ID = config.SHOP_ID;
+          AUTH_TOKEN = config.AUTH_TOKEN;
+
+          // Auto-Register startup service on Mac
+          registerMacAutostart();
+
+          startPolling();
+        } catch (error) {
+          console.error('❌ Setup failed!');
+          if (error.response) {
+            const status = error.response.status;
+            if (status === 404) {
+              console.error(`Reason (404 Not Found): The URL "${resolvedApiUrl}" did not resolve to a running PFM backend API.`);
+              console.error('👉 If you are testing locally, make sure your backend is running and enter: http://localhost:5050/api');
+            } else if (status === 401) {
+              console.error('Reason (401 Unauthorized): Invalid email or password. Please verify your shop account credentials.');
+            } else {
+              console.error(`Reason: ${error.response.data.error || 'Server responded with an error.'} (Status ${status})`);
+            }
+          } else {
+            console.error(`Error details: ${error.message}`);
+            console.error('👉 Check if your internet connection is active or if your local server is offline.');
+          }
         }
-
-        // Save config
-        const config = {
-          API_BASE_URL,
-          SHOP_ID: String(shop.id),
-          AUTH_TOKEN: token
-        };
-
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-        console.log('✅ Configuration successfully saved!');
-        
-        SHOP_ID = config.SHOP_ID;
-        AUTH_TOKEN = config.AUTH_TOKEN;
-
-        // Auto-Register startup service on Mac
-        registerMacAutostart();
-
-        startPolling();
-      } catch (error) {
-        console.error('❌ Setup failed!');
-        if (error.response) {
-          console.error(`Reason: ${error.response.data.error || 'Invalid credentials'}`);
-        } else {
-          console.error(`Error details: ${error.message}`);
-        }
-      }
+      });
     });
   });
 }
