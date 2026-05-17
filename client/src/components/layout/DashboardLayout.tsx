@@ -65,6 +65,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notifCount, setNotifCount] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    setIsMobile(media.matches);
+    const listener = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, []);
 
   useEffect(() => {
     loadUser();
@@ -128,14 +137,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ x: 0 }}
+        animate={{ x: isMobile ? (sidebarOpen ? 0 : -260) : 0 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         style={{
           width: 260, flexShrink: 0, position: 'fixed', top: 0, bottom: 0, left: 0,
           background: 'var(--bg-primary)', borderRight: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column', zIndex: 50,
-          transform: sidebarOpen ? 'translateX(0)' : undefined,
         }}
-        className={sidebarOpen ? '' : 'sidebar-desktop'}
       >
         {/* Logo */}
         <div style={{
@@ -151,8 +159,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               CampusPrint
             </span>
           </Link>
-          <button onClick={() => setSidebarOpen(false)} className="btn btn-ghost btn-icon"
-            style={{ display: 'none' }}>
+          <button onClick={() => setSidebarOpen(false)} className="btn btn-ghost btn-icon mobile-only"
+            style={{ padding: 4 }}>
             <HiOutlineX size={20} />
           </button>
         </div>
@@ -216,7 +224,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </motion.aside>
 
       {/* Main Content */}
-      <main style={{ flex: 1, marginLeft: 260, minHeight: '100vh' }}>
+      <main style={{ flex: 1, marginLeft: isMobile ? 0 : 260, minHeight: '100vh', transition: 'margin-left 0.3s ease' }}>
         {/* Top bar */}
         <motion.header
           initial={{ y: -10, opacity: 0 }}
@@ -230,11 +238,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}
         >
-          <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon"
-            style={{ display: 'none' }}>
+          <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon mobile-only"
+            style={{ padding: 4, marginRight: 12 }}>
             <HiOutlineMenu size={22} />
           </button>
-          <div />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div 
@@ -302,9 +309,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
 
       <style jsx>{`
-        @media (max-width: 768px) {
-          .sidebar-desktop { transform: translateX(-100%) !important; }
-          main { margin-left: 0 !important; }
+        @media (min-width: 769px) {
+          .mobile-only { display: none !important; }
         }
       `}</style>
     </div>
