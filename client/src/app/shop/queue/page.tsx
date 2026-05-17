@@ -20,33 +20,19 @@ export default function QueuePage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [qrModalOrder, setQrModalOrder] = useState<any>(null);
-  const [agentCommand, setAgentCommand] = useState('');
+  const [showAgentGuide, setShowAgentGuide] = useState(false);
+
+  useEffect(() => {
+    // Check if agent is set up or just show the option
+    if (typeof window !== 'undefined') {
+      setShowAgentGuide(true);
+    }
+  }, []);
 
   const loadOrders = (background = false) => {
     if (!background) setLoading(true);
     api.get('/orders').then(({ data }) => setOrders(data.orders || [])).catch(() => {}).finally(() => setLoading(false));
   };
-
-  useEffect(() => {
-    // Generate the terminal run command automatically using their active browser token
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token') || '';
-      api.get('/shops/my')
-        .then(({ data }) => {
-          const shopId = data.shop?.id || '1';
-          
-          // Get the actual configured backend API URL from Axios defaults
-          let resolvedApiUrl = api.defaults.baseURL || 'http://localhost:5000/api';
-          if (resolvedApiUrl.startsWith('/')) {
-            resolvedApiUrl = `${window.location.origin}${resolvedApiUrl}`;
-          }
-          
-          setAgentCommand(`API_BASE_URL=${resolvedApiUrl} SHOP_ID=${shopId} AUTH_TOKEN=${token} node agent.js`);
-        })
-        .catch(() => {});
-    }
-  }, []);
-
 
   useEffect(() => { loadOrders(); const i = setInterval(() => loadOrders(true), 3000); return () => clearInterval(i); }, []);
 
@@ -216,31 +202,26 @@ export default function QueuePage() {
         </AnimatePresence>
       )}
 
-      {/* Local Agent Helper Box */}
-      {agentCommand && (
+      {/* Local Agent Setup Box */}
+      {showAgentGuide && (
         <div className="glass-card" style={{ marginTop: 40, padding: 24, border: '1px dashed var(--primary)' }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            🔌 Connect Local Print Agent
+            🔌 Connect Your Physical Printer
           </h3>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 16 }}>
-            Run this single command in your Mac terminal inside the <code>print-agent</code> folder to connect your physical printer:
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            PFM supports direct, zero-click printing from the cloud to your local desktop printer. 
           </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input 
-              readOnly 
-              value={agentCommand} 
-              style={{ flex: 1, padding: '10px 12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontFamily: 'monospace', fontSize: 11 }}
-            />
-            <button 
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                navigator.clipboard.writeText(agentCommand);
-                toast.success('📋 Command copied to clipboard!');
-              }}
-            >
-              Copy
-            </button>
+          <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid var(--border)', fontSize: 13 }}>
+            <div style={{ fontWeight: 600, color: 'var(--primary-light)', marginBottom: 8 }}>⚡ 3-Step Setup:</div>
+            <ol style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-tertiary)' }}>
+              <li>Download the lightweight <strong>PFM Print Agent</strong> folder to your laptop.</li>
+              <li>Double-click the <code>start-agent.command</code> (Mac) or <code>start-agent.bat</code> (Windows) file.</li>
+              <li>Log in with your shop account credentials.</li>
+            </ol>
           </div>
+          <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            🟢 <strong>Note:</strong> The agent automatically registers itself to run silently in the background when your computer boots up. You only have to log in once!
+          </p>
         </div>
       )}
 

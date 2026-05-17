@@ -3,22 +3,22 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const readline = require('readline');
+const os = require('os');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const TEMP_DIR = path.join(__dirname, 'temp_prints');
-const POLL_INTERVAL_MS = 3000; // Poll every 3 seconds
+const POLL_INTERVAL_MS = 3000;
 
-// Default Configurations
 let API_BASE_URL = process.env.API_BASE_URL || 'https://container-ruby.vercel.app/api';
-let SHOP_ID = process.env.SHOP_ID || '';
-let AUTH_TOKEN = process.env.AUTH_TOKEN || '';
+let SHOP_ID = '';
+let AUTH_TOKEN = '';
 
 // Ensure temp directory exists
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR);
 }
 
-// Function to load local configurations
+// Load local configuration
 function loadConfig() {
   if (fs.existsSync(CONFIG_PATH)) {
     try {
@@ -28,36 +28,127 @@ function loadConfig() {
       AUTH_TOKEN = config.AUTH_TOKEN || AUTH_TOKEN;
       return true;
     } catch (e) {
-      console.error('⚠️ Could not parse config.json, using defaults.');
+      console.error('⚠️ Could not parse config.json');
     }
   }
   return false;
 }
 
-// Function to prompt user for token and shop ID
-function setupInteractiveConfig() {
+// Auto-register background task on macOS startup
+function registerMacAutostart() {
+  if (process.platform !== 'darwin') return; // Only run on macOS
+
+  const homeDir = os.homedir();
+  const launchAgentsDir = path.join(homeDir, 'Library', 'LaunchAgents');
+  
+  if (!fs.existsSync(launchAgentsDir)) {
+    fs.mkdirSync(launchAgentsDir, { recursive: true });
+  }
+
+  const plistPath = path.join(launchAgentsDir, 'com.pfm.printagent.plist');
+  const logPath = path.join(__dirname, 'agent.log');
+
+  const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.pfm.printagent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${process.execPath}</string>
+        <string>${path.join(__dirname, 'agent.js')}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>WorkingDirectory</key>
+    <string>${__dirname}</string>
+    <key>StandardOutPath</key>
+    <string>${logPath}</string>
+    <key>StandardErrorPath</key>
+    <string>${logPath}</string>
+</dict>
+</plist>`;
+
+  try {
+    fs.writeFileSync(plistPath, plistContent);
+    // Tell macOS system launcher to boot the plist file
+    exec(`launchctl load "${plistPath}"`, () => {
+      console.log('🎉 [AUTO-START] Print Agent registered to run silently in the background on startup!');
+    });
+  } catch (err) {
+    console.error('⚠️ Failed to register system startup task:', err.message);
+  }
+}
+
+// First-time setup using direct login
+function runInteractiveSetup() {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
   });
 
-  console.log('\n⚙️  [PFM PRINT AGENT] First-time setup required!');
-  rl.question('🏪 Enter your Shop ID (e.g. 8): ', (shopIdInput) => {
-    rl.question('🔑 Paste your AUTH_TOKEN: ', (tokenInput) => {
-      const config = {
-        API_BASE_URL,
-        SHOP_ID: shopIdInput.trim(),
-        AUTH_TOKEN: tokenInput.trim()
-      };
+  console.log('\n==========================================');
+  console.log('   🏪 PFM PRINT AGENT: FIRST TIME SETUP   ');
+  console.log('==========================================');
+  console.log('Enter your shop manager credentials to connect this printer.\n');
 
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-      console.log('✅ Configuration securely saved to print-agent/config.json!');
-      
-      SHOP_ID = config.SHOP_ID;
-      AUTH_TOKEN = config.AUTH_TOKEN;
-      
+  rl.question('📧 Shop Email: ', (email) => {
+    // Hide password characters in console if possible, otherwise simple input
+    rl.question('🔑 Password: ', async (password) => {
       rl.close();
-      startPolling();
+      console.log('\n⏳ Authenticating with PFM Server...');
+
+      try {
+        // Step 1: Login to get token
+        const loginRes = await axios.post(`${API_BASE_URL}/auth/login`, {
+          email: email.trim(),
+          password: password.trim()
+        });
+
+        const token = loginRes.data.token;
+
+        // Step 2: Fetch profile to discover Shop ID automatically
+        console.log('🏪 Fetching Shop profile details...');
+        const profileRes = await axios.get(`${API_BASE_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const user = profileRes.data.user;
+        const shop = profileRes.data.shop;
+
+        if (user.role !== 'shop' || !shop) {
+          console.error('❌ Authentication failed: This account does not own a registered shop.');
+          return;
+        }
+
+        // Save config
+        const config = {
+          API_BASE_URL,
+          SHOP_ID: String(shop.id),
+          AUTH_TOKEN: token
+        };
+
+        fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+        console.log('✅ Configuration successfully saved!');
+        
+        SHOP_ID = config.SHOP_ID;
+        AUTH_TOKEN = config.AUTH_TOKEN;
+
+        // Auto-Register startup service on Mac
+        registerMacAutostart();
+
+        startPolling();
+      } catch (error) {
+        console.error('❌ Setup failed!');
+        if (error.response) {
+          console.error(`Reason: ${error.response.data.error || 'Invalid credentials'}`);
+        } else {
+          console.error(`Error details: ${error.message}`);
+        }
+      }
     });
   });
 }
@@ -80,16 +171,19 @@ async function downloadFile(url, dest) {
 
 // Function to trigger OS print or open preview
 function printFile(filePath) {
-  console.log(`🖨️  [PRINTER AGENT] Triggering print for: ${filePath}`);
+  const logMsg = `🖨️  [PRINTER AGENT] Triggering print for: ${filePath}`;
+  console.log(logMsg);
+  
+  // Write to internal agent log for background verification
+  fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ${logMsg}\n`);
+
   const isWindows = process.platform === 'win32';
   const openCommand = isWindows ? 'start' : 'open';
 
-  exec(`"${openCommand}" "${filePath}"`, (err, stdout, stderr) => {
+  exec(`"${openCommand}" "${filePath}"`, (err) => {
     if (err) {
       console.error('❌ Failed to execute command:', err.message);
-      return;
     }
-    console.log('✅ File processed successfully!');
   });
 }
 
@@ -117,13 +211,12 @@ async function pollForJobs() {
     }
   } catch (error) {
     if (error.response && error.response.status === 403) {
-      console.error('❌ Authentication failed! Check your AUTH_TOKEN and SHOP_ID in config.json.');
+      console.error('❌ Authentication failed! Config token expired or shop was disconnected.');
     } else {
       console.error('⚠️ Polling error:', error.message);
     }
   }
 
-  // Schedule next poll
   setTimeout(pollForJobs, POLL_INTERVAL_MS);
 }
 
@@ -133,10 +226,10 @@ function startPolling() {
   pollForJobs();
 }
 
-// Main execution flow
+// Execution Flow
 const hasConfig = loadConfig();
 if (hasConfig && SHOP_ID && AUTH_TOKEN) {
   startPolling();
 } else {
-  setupInteractiveConfig();
+  runInteractiveSetup();
 }
