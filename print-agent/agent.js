@@ -90,13 +90,6 @@ function runInteractiveSetup() {
     output: process.stdout
   });
 
-// First-time setup using direct login
-function runInteractiveSetup() {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-
   console.log('\n==========================================');
   console.log('   🏪 PFM PRINT AGENT: FIRST TIME SETUP   ');
   console.log('==========================================');
