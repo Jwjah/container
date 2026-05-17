@@ -34,9 +34,14 @@ export default function QueuePage() {
       api.get('/shops/my')
         .then(({ data }) => {
           const shopId = data.shop?.id || '1';
-          // Using a public proxy or fallback for local development url
-          const devUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : 'https://container-ruby.vercel.app/api'; 
-          setAgentCommand(`API_BASE_URL=${devUrl} SHOP_ID=${shopId} AUTH_TOKEN=${token} node agent.js`);
+          
+          // Get the actual configured backend API URL from Axios defaults
+          let resolvedApiUrl = api.defaults.baseURL || 'http://localhost:5000/api';
+          if (resolvedApiUrl.startsWith('/')) {
+            resolvedApiUrl = `${window.location.origin}${resolvedApiUrl}`;
+          }
+          
+          setAgentCommand(`API_BASE_URL=${resolvedApiUrl} SHOP_ID=${shopId} AUTH_TOKEN=${token} node agent.js`);
         })
         .catch(() => {});
     }
