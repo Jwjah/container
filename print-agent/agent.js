@@ -118,11 +118,11 @@ function runInteractiveSetup() {
             headers: { Authorization: `Bearer ${token}` }
           });
 
-          const user = profileRes.data.user;
-          const shop = profileRes.data.shop;
+          const user = profileRes.data?.user;
+          const shop = profileRes.data?.shop;
 
-          if (user.role !== 'shop' || !shop) {
-            console.error('❌ Authentication failed: This account does not own a registered shop.');
+          if (!user || user.role !== 'shop' || !shop) {
+            console.error('❌ Authentication failed: This account does not own a registered shop or details are invalid.');
             return;
           }
 
