@@ -1,17 +1,30 @@
 /**
- * Email Service — Uses Brevo (Sendinblue) HTTP API
- * Works on Render free tier because it uses HTTPS (port 443),
- * which is never blocked unlike SMTP ports (25, 465, 587).
- *
- * Free plan: 300 emails/day, no domain verification needed.
+ * Email Service — Uses Brevo (Sendinblue) HTTP API or SMTP fallback
+ * If BREVO_API_KEY is not set, falls back to nodemailer SMTP using your env credentials.
  */
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const SENDER_EMAIL = process.env.SMTP_USER || 'abhir2756@gmail.com';
 
+let transporter = null;
+
 if (!BREVO_API_KEY) {
-  console.warn('⚠️ BREVO_API_KEY not found — email sending will fail');
+  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '465', 10),
+      secure: process.env.SMTP_PORT === '465' || process.env.SMTP_PORT === '465',
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+    console.log('✅ SMTP email service initialized (using nodemailer)');
+  } else {
+    console.warn('⚠️ No email service configured (BREVO_API_KEY or SMTP_USER/PASS missing) — OTPs will only be logged to the console.');
+  }
 } else {
   console.log('✅ Brevo email service initialized');
 }
@@ -45,29 +58,47 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     </div>
   `;
 
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': BREVO_API_KEY,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      sender: { name: 'CampusPrint', email: SENDER_EMAIL },
-      to: [{ email }],
+  // Always log the OTP to the console for development unblocking
+  console.log(`\n🔑 [OTP SECURITY DEBUG] Code for ${email}: ${otp}\n`);
+
+  if (BREVO_API_KEY) {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'CampusPrint', email: SENDER_EMAIL },
+        to: [{ email }],
+        subject: subjects[purpose] || subjects.verification,
+        htmlContent: html,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ Brevo API error:', JSON.stringify(result));
+      throw new Error(result.message || 'Email delivery failed');
+    }
+
+    console.log(`📧 OTP email sent to ${email} via Brevo (messageId: ${result.messageId})`);
+  } else if (transporter) {
+    const info = await transporter.sendMail({
+      from: `"CampusPrint" <${SENDER_EMAIL}>`,
+      to: email,
       subject: subjects[purpose] || subjects.verification,
-      htmlContent: html,
-    }),
-  });
-
-  const result = await response.json();
-
-  if (!response.ok) {
-    console.error('❌ Brevo API error:', JSON.stringify(result));
-    throw new Error(result.message || 'Email delivery failed');
+      html: html,
+    });
+    console.log(`📧 OTP email sent to ${email} via SMTP (messageId: ${info.messageId})`);
+  } else {
+    // In production, we must fail if no email service is set up, but let it pass silently in development
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('No email service configured on the server.');
+    }
   }
-
-  console.log(`📧 OTP email sent to ${email} (messageId: ${result.messageId})`);
 };
 
 module.exports = { sendOTP };
