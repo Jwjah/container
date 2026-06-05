@@ -2,6 +2,7 @@ const db = require('../config/database');
 const { generateOrderHash, generateQRCode, calculatePrice } = require('../utils/helpers');
 const { PDFDocument } = require('pdf-lib');
 const { uploadToCloudinary } = require('../middleware/upload');
+const { sendPushToUser } = require('../services/pushService');
 
 // POST /api/orders — Create a new order
 exports.createOrder = async (req, res) => {
@@ -109,6 +110,12 @@ exports.createOrder = async (req, res) => {
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [shop.user_id, '🆕 New Order', `New print order #${orderHash.substring(0, 8).toUpperCase()} received`, 'order']
     );
+    await sendPushToUser(shop.user_id, {
+      title: '🆕 New Order',
+      message: `New print order #${orderHash.substring(0, 8).toUpperCase()} received`,
+      url: '/shop/queue',
+      tag: `order-${orderId}`,
+    });
 
     res.status(201).json({
       message: 'Order placed successfully',
@@ -268,6 +275,12 @@ exports.updateOrderStatus = async (req, res) => {
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [order.student_id, 'Order Update', statusMessages[status], 'order']
     );
+    await sendPushToUser(order.student_id, {
+      title: 'Order Update',
+      message: statusMessages[status],
+      url: '/student/orders',
+      tag: `order-${req.params.id}`,
+    });
 
     res.json({ message: 'Status updated', status });
   } catch (err) {

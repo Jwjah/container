@@ -548,3 +548,38 @@ select.input {
   width: 100% !important;
   object-fit: cover !important;
 }
+
+/* ─── PWA Standalone Mode ────────────────────────────────── */
+
+/* Safe area padding for iPhone notch / Dynamic Island */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .page-wrapper,
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Prevent pull-to-refresh in standalone PWA */
+@media all and (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* App-like feel: prevent text selection on interactive elements */
+@media all and (display-mode: standalone) {
+  .btn,
+  .tab,
+  .toggle,
+  .badge,
+  .stat-card,
+  .nav-item {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+

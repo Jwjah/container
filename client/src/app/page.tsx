@@ -38,7 +38,7 @@ export default function LandingPage() {
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-          padding: '16px 24px',
+          padding: 'calc(16px + env(safe-area-inset-top, 0px)) 24px 16px 24px',
           background: 'rgba(5, 5, 16, 0.8)',
           backdropFilter: 'blur(20px)',
           borderBottom: '1px solid var(--border)',

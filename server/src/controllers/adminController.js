@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { sendPushToUser } = require('../services/pushService');
 
 // GET /api/admin/stats — Dashboard analytics
 exports.getStats = async (req, res) => {
@@ -127,6 +128,12 @@ exports.approveShop = async (req, res) => {
           'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
           [shops[0].user_id, '🎉 Shop Approved!', `"${shops[0].shop_name}" has been approved. You can start accepting orders!`, 'system']
         );
+        await sendPushToUser(shops[0].user_id, {
+          title: '🎉 Shop Approved!',
+          message: `"${shops[0].shop_name}" has been approved. You can start accepting orders!`,
+          url: '/shop',
+          tag: 'shop-approval',
+        });
       }
     } else {
       await db.execute('DELETE FROM shops WHERE id = ?', [req.params.id]);
@@ -213,10 +220,23 @@ exports.cancelOrder = async (req, res) => {
     await db.execute('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [order.student_id, 'Order Cancelled', `Your order #${order.order_hash.substring(0, 8).toUpperCase()} has been cancelled by Admin.`, 'order']
     );
+    await sendPushToUser(order.student_id, {
+      title: '❌ Order Cancelled',
+      message: `Your order #${order.order_hash.substring(0, 8).toUpperCase()} has been cancelled by Admin.`,
+      url: '/student/orders',
+      tag: `order-${id}`,
+    });
+    
     if (shops.length) {
       await db.execute('INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [shops[0].user_id, 'Order Cancelled', `Order #${order.order_hash.substring(0, 8).toUpperCase()} has been cancelled by Admin.`, 'order']
       );
+      await sendPushToUser(shops[0].user_id, {
+        title: '❌ Order Cancelled',
+        message: `Order #${order.order_hash.substring(0, 8).toUpperCase()} has been cancelled by Admin.`,
+        url: '/shop/queue',
+        tag: `order-${id}`,
+      });
     }
 
     res.json({ message: 'Order cancelled successfully' });

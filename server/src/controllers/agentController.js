@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { generateQRCode } = require('../utils/helpers');
+const { sendPushToUser } = require('../services/pushService');
 
 // GET /api/agent/available — Get available deliveries (Gig Radar)
 exports.getAvailableDeliveries = async (req, res) => {
@@ -61,6 +62,12 @@ exports.acceptDelivery = async (req, res) => {
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [order.student_id, '\uD83D\uDE80 Delivery Agent Assigned', 'A delivery agent has accepted your order and will collect it from the shop shortly.', 'delivery']
     );
+    await sendPushToUser(order.student_id, {
+      title: '🚀 Delivery Agent Assigned',
+      message: 'A delivery agent has accepted your order and will collect it from the shop shortly.',
+      url: '/student/orders',
+      tag: `order-${orderId}`,
+    });
 
     res.json({ message: 'Delivery accepted', orderId, earnings });
   } catch (err) {
@@ -171,6 +178,12 @@ exports.verifyPickup = async (req, res) => {
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [orders[0].student_id, '\uD83D\uDE80 Order Out for Delivery', 'The delivery agent has picked up your printout and is on the way to you!', 'delivery']
     );
+    await sendPushToUser(orders[0].student_id, {
+      title: '🚀 Order Out for Delivery',
+      message: 'The delivery agent has picked up your printout and is on the way to you!',
+      url: '/student/orders',
+      tag: `order-${orderId}`,
+    });
 
     res.json({ message: 'Pickup verified. Head to the student now.' });
   } catch (err) {
@@ -226,6 +239,12 @@ exports.verifyDelivery = async (req, res) => {
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [req.user.id, '💰 Earnings Credited!', `You earned ₹${earning.toFixed(0)} for delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}.`, 'wallet']
       );
+      await sendPushToUser(req.user.id, {
+        title: '💰 Earnings Credited!',
+        message: `You earned ₹${earning.toFixed(0)} for delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}.`,
+        url: '/agent/earnings',
+        tag: `wallet-${Date.now()}`,
+      });
     }
 
     res.json({ message: 'Delivery verified! Earnings credited.' });

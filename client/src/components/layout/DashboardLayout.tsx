@@ -147,7 +147,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         {/* Logo */}
         <div style={{
-          padding: '24px 20px', borderBottom: '1px solid var(--border)',
+          padding: 'calc(24px + env(safe-area-inset-top, 0px)) 20px 24px 20px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <Link href={`/${user.role}`} style={{ textDecoration: 'none' }}>
@@ -231,7 +231,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           animate={{ y: 0, opacity: 1 }}
           style={{
             position: 'sticky', top: 0, zIndex: 30,
-            padding: '16px 24px',
+            padding: 'calc(16px + env(safe-area-inset-top, 0px)) 24px 16px 24px',
             background: 'rgba(5, 5, 16, 0.8)',
             backdropFilter: 'blur(20px)',
             borderBottom: '1px solid var(--border)',

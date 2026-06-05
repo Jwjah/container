@@ -31,3 +31,5 @@ venv/
 uploads/
 server/data/campus.db-shm
 server/data/campus.db-wal
+.vercel
+.env*.local

@@ -1,0 +1,5 @@
+{
+  "API_BASE_URL": "https://container-2m65.onrender.com/api",
+  "SHOP_ID": "13",
+  "AUTH_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NjcsImVtYWlsIjoicGV2aWs4MTk2N0BkYXJkci5jb20iLCJyb2xlIjoic2hvcCIsImlhdCI6MTc3OTAxNjc5NSwiZXhwIjoxNzc5NjIxNTk1fQ.rSdDxz2L_7KKEQbUt6KTH6-5EHC7xtiautXPWj8RGnQ"
+}

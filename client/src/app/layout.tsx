@@ -1,11 +1,36 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import InstallPrompt from "@/components/InstallPrompt";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#050510",
+};
 
 export const metadata: Metadata = {
   title: "CampusPrint — Campus Printing Made Easy",
   description: "Upload, print, and deliver documents across campus. Students, shops, and agents — all connected in one premium platform.",
   keywords: "campus, print, university, documents, delivery",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CampusPrint",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
+    "application-name": "CampusPrint",
+    "apple-mobile-web-app-title": "CampusPrint",
+    "msapplication-TileColor": "#050510",
+    "msapplication-TileImage": "/icons/icon-144x144.png",
+  },
 };
 
 export default function RootLayout({
@@ -15,7 +40,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png" />
+      </head>
       <body>
+        <ServiceWorkerRegistrar />
+        <InstallPrompt />
         <Toaster
           position="top-right"
           toastOptions={{
