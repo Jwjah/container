@@ -1,21 +1,26 @@
 /**
- * Email Service — Uses Brevo (Sendinblue) HTTP API or SMTP fallback
- * If BREVO_API_KEY is not set, falls back to nodemailer SMTP using your env credentials.
+ * Email Service — Supports Resend SDK, Brevo HTTP API, or SMTP fallback
  */
+const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SENDER_EMAIL = process.env.SMTP_USER || 'abhir2756@gmail.com';
 
+let resendClient = null;
 let transporter = null;
 
-if (!BREVO_API_KEY) {
+if (RESEND_API_KEY) {
+  resendClient = new Resend(RESEND_API_KEY);
+  console.log('✅ Resend email service initialized (using SDK)');
+} else if (!BREVO_API_KEY) {
   if (process.env.SMTP_USER && process.env.SMTP_PASS) {
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '465', 10),
-      secure: process.env.SMTP_PORT === '465' || process.env.SMTP_PORT === '465',
+      secure: process.env.SMTP_PORT === '465',
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -23,7 +28,7 @@ if (!BREVO_API_KEY) {
     });
     console.log('✅ SMTP email service initialized (using nodemailer)');
   } else {
-    console.warn('⚠️ No email service configured (BREVO_API_KEY or SMTP_USER/PASS missing) — OTPs will only be logged to the console.');
+    console.warn('⚠️ No email service configured (BREVO_API_KEY, RESEND_API_KEY, or SMTP_USER/PASS missing) — OTPs will only be logged to the console.');
   }
 } else {
   console.log('✅ Brevo email service initialized');
@@ -61,6 +66,33 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
   // Always log the OTP to the console for development unblocking
   console.log(`\n🔑 [OTP SECURITY DEBUG] Code for ${email}: ${otp}\n`);
 
+  // 1. Try Resend SDK first if key is present
+  if (resendClient) {
+    try {
+      // If using a personal gmail address as sender, fallback to Resend's official onboarding address
+      const sender = SENDER_EMAIL.includes('@gmail.com') || SENDER_EMAIL.includes('@example.com')
+        ? 'CampusPrint <onboarding@resend.dev>'
+        : `CampusPrint <${SENDER_EMAIL}>`;
+
+      const response = await resendClient.emails.send({
+        from: sender,
+        to: [email],
+        subject: subjects[purpose] || subjects.verification,
+        html: html,
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Resend SDK error');
+      }
+
+      console.log(`📧 OTP email sent to ${email} via Resend (id: ${response.data?.id})`);
+      return;
+    } catch (resendErr) {
+      console.error('❌ Resend API error, trying SMTP/Brevo fallback...', resendErr.message);
+    }
+  }
+
+  // 2. Try Brevo API if key is present
   if (BREVO_API_KEY) {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -85,7 +117,11 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
     }
 
     console.log(`📧 OTP email sent to ${email} via Brevo (messageId: ${result.messageId})`);
-  } else if (transporter) {
+    return;
+  }
+
+  // 3. Try SMTP fallback
+  if (transporter) {
     const info = await transporter.sendMail({
       from: `"CampusPrint" <${SENDER_EMAIL}>`,
       to: email,
@@ -93,11 +129,12 @@ const sendOTP = async (email, otp, purpose = 'verification') => {
       html: html,
     });
     console.log(`📧 OTP email sent to ${email} via SMTP (messageId: ${info.messageId})`);
-  } else {
-    // In production, we must fail if no email service is set up, but let it pass silently in development
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('No email service configured on the server.');
-    }
+    return;
+  }
+
+  // Fallback for development (allow to bypass in dev but fail in prod if no keys configured)
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('No email service configured on the server.');
   }
 };
 
