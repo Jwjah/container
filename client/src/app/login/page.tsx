@@ -9,6 +9,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { TapButton, PageTransition } from '@/components/animations';
 import { HiOutlineMail, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff } from 'react-icons/hi';
+import Logo from '@/components/ui/Logo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -24,18 +25,19 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', { email, password });
-      if (data.requiresOTP) {
+      if (!otpMode) {
+        await api.post('/auth/login', { email, password });
         setOtpMode(true);
-        toast.success('OTP sent to your email');
+        toast.success('OTP sent to your email!');
       } else {
+        const { data } = await api.post('/auth/verify-otp', { email, code: otp });
         setAuth(data.user, data.token);
-        toast.success(`Welcome back, ${data.user.name}!`);
+        toast.success('🎉 Welcome back!');
         const routes: Record<string, string> = { student: '/student', shop: '/shop', agent: '/agent', admin: '/admin' };
         router.push(routes[data.user.role] || '/student');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      toast.error(err.response?.data?.error || 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -68,14 +70,8 @@ export default function LoginPage() {
             transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
             style={{ textAlign: 'center', marginBottom: 40 }}
           >
-            <Link href="/" style={{ textDecoration: 'none' }}>
-              <span style={{
-                fontSize: 28, fontWeight: 900,
-                background: 'linear-gradient(135deg, #6366f1, #a78bfa, #ec4899)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              }}>
-                CampusPrint
-              </span>
+            <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex', justifyContent: 'center' }}>
+              <Logo size={44} />
             </Link>
             <p style={{ color: 'var(--text-tertiary)', fontSize: 14, marginTop: 8 }}>
               {otpMode ? 'Enter the OTP sent to your email' : 'Welcome back! Sign in to continue.'}

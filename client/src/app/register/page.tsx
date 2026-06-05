@@ -9,6 +9,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/lib/store';
 import { TapButton, PageTransition } from '@/components/animations';
 import { HiOutlineUser, HiOutlineMail, HiOutlineLockClosed, HiOutlinePhone } from 'react-icons/hi';
+import Logo from '@/components/ui/Logo';
 
 const roles = [
   { value: 'student', label: '🎓 Student', desc: 'Print documents & get delivery' },
@@ -63,14 +64,8 @@ export default function RegisterPage() {
             animate={{ scale: 1, opacity: 1 }}
             style={{ textAlign: 'center', marginBottom: 32 }}
           >
-            <Link href="/" style={{ textDecoration: 'none' }}>
-              <span style={{
-                fontSize: 28, fontWeight: 900,
-                background: 'linear-gradient(135deg, #6366f1, #a78bfa, #ec4899)',
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              }}>
-                CampusPrint
-              </span>
+            <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex', justifyContent: 'center' }}>
+              <Logo size={44} />
             </Link>
             <p style={{ color: 'var(--text-tertiary)', fontSize: 14, marginTop: 8 }}>
               {step === 1 && 'Choose your role to get started'}
