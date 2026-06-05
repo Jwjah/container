@@ -194,7 +194,7 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
     canvas.on('mouse:down', (opt) => {
       if ((canvas as any)._samplingColor) {
         const p = canvas.getPointer(opt.e);
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext();
         const data = ctx.getImageData(p.x, p.y, 1, 1).data;
         const hex = `#${((1 << 24) + (data[0] << 16) + (data[1] << 8) + data[2]).toString(16).slice(1)}`;
         setCamouflageColor(hex);
@@ -234,6 +234,7 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
 
   const applyFabricFilter = (filterObj: any, index: number) => {
     if (!bgImage || !fabricCanvas) return;
+    if (!bgImage.filters) bgImage.filters = [];
     bgImage.filters[index] = filterObj;
     bgImage.applyFilters();
     fabricCanvas.renderAll();
@@ -257,9 +258,9 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
     if (preset === 'Grayscale') bgImage.filters.push(new fabric.Image.filters.Grayscale());
     if (preset === 'Sepia') bgImage.filters.push(new fabric.Image.filters.Sepia());
     if (preset === 'Invert') bgImage.filters.push(new fabric.Image.filters.Invert());
-    if (preset === 'Vintage') bgImage.filters.push(new fabric.Image.filters.Vintage());
-    if (preset === 'Polaroid') bgImage.filters.push(new fabric.Image.filters.Polaroid());
-    if (preset === 'Kodachrome') bgImage.filters.push(new fabric.Image.filters.Kodachrome());
+    if (preset === 'Vintage') bgImage.filters.push(new (fabric.Image.filters as any).Vintage());
+    if (preset === 'Polaroid') bgImage.filters.push(new (fabric.Image.filters as any).Polaroid());
+    if (preset === 'Kodachrome') bgImage.filters.push(new (fabric.Image.filters as any).Kodachrome());
     bgImage.applyFilters();
     fabricCanvas.renderAll();
     saveState(fabricCanvas);

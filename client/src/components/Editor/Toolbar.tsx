@@ -317,10 +317,9 @@ export default function Toolbar({
 
       {/* ── Main Toolbar (Desktop) ────────────────────────────── */}
       {!isMobile && (
-        <div style={{
+        <div className="custom-scrollbar" style={{
           background: bg, borderBottom: `1px solid ${border}`, height: '54px',
-          display: 'flex', alignItems: 'center', padding: '0 10px', gap: '2px', overflowX: 'auto',
-          className: "custom-scrollbar"
+          display: 'flex', alignItems: 'center', padding: '0 10px', gap: '2px', overflowX: 'auto'
         }}>
           <ToolsList />
           {sep}

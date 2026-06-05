@@ -26,7 +26,7 @@ export async function imageToPdf(imageFile: File): Promise<File> {
 
   const pdfBytes = await pdfDoc.save();
   const name = imageFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
-  return new File([pdfBytes], name, { type: 'application/pdf' });
+  return new File([pdfBytes as any], name, { type: 'application/pdf' });
 }
 
 /**
@@ -48,7 +48,7 @@ export async function pdfToImages(
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d')!;
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvasContext: ctx, viewport } as any).promise;
 
     const blob = await new Promise<Blob>((resolve) =>
       canvas.toBlob((b) => resolve(b!), 'image/png')
