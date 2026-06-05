@@ -124,6 +124,18 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Auto-promote and verify user if their email matches the configured ADMIN_EMAIL
+    if (user.email.toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase()) {
+      if (user.role !== 'admin' || !user.is_verified) {
+        await db.execute(
+          'UPDATE users SET role = ?, is_verified = 1 WHERE id = ?',
+          ['admin', user.id]
+        );
+        user.role = 'admin';
+        user.is_verified = 1;
+      }
+    }
+
     const isAdmin = user.role === 'admin';
 
     if (!user.is_verified && !isAdmin) {
