@@ -108,7 +108,26 @@ exports.login = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const adminEmail = process.env.ADMIN_EMAIL || 'abhir2756@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
+
+    let [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+
+    // Auto-seed the admin user if they don't exist yet in the database
+    if (!users.length && email.toLowerCase() === adminEmail.toLowerCase()) {
+      if (password === adminPassword) {
+        const hash = await bcrypt.hash(password, 12);
+        const [insertResult] = await db.execute(
+          'INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, ?)',
+          ['Super Admin', email, hash, 'admin', 1]
+        );
+        const [newUsers] = await db.execute('SELECT * FROM users WHERE id = ?', [insertResult.insertId]);
+        users = newUsers;
+      } else {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    }
+
     if (!users.length) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -124,8 +143,8 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Auto-promote and verify user if their email matches the configured ADMIN_EMAIL
-    if (user.email.toLowerCase() === (process.env.ADMIN_EMAIL || '').toLowerCase()) {
+    // Auto-promote and verify user if their email matches the admin email
+    if (user.email.toLowerCase() === adminEmail.toLowerCase()) {
       if (user.role !== 'admin' || !user.is_verified) {
         await db.execute(
           'UPDATE users SET role = ?, is_verified = 1 WHERE id = ?',
