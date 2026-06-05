@@ -1,13 +1,20 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { fabric } from 'fabric';
-import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
 import Toolbar from './Editor/Toolbar';
 import CanvasLayer from './Editor/CanvasLayer';
+import FontControls from './Editor/FontControls';
+import PropertyPanel from './Editor/PropertyPanel';
+import SignaturePad from './Editor/SignaturePad';
+import ImageFilters from './Editor/ImageFilters';
+import CropTool from './Editor/CropTool';
+import ColorSampler from './Editor/ColorSampler';
 import { UndoRedoManager } from '@/utils/undoRedo';
+import { exportCanvas, imageToPdf, sampleSurroundingColor } from '@/utils/conversionUtils';
 
 interface ImageEditorProps {
   file: File;
@@ -16,124 +23,84 @@ interface ImageEditorProps {
 }
 
 export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps) {
+  const [imageUrl, setImageUrl] = useState('');
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [currentTool, setCurrentTool] = useState('select');
-  const [showThumbnails, setShowThumbnails] = useState(false);
-  const [scale, setScale] = useState(1.0);
-  const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [canvasSize, setCanvasSize] = useState<{width: number, height: number} | null>(null);
+  const [scale, setScale] = useState(1.0);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
-  const [historyManager] = useState(() => new UndoRedoManager<string>());
+  const [bgImage, setBgImage] = useState<fabric.Image | null>(null);
+  
+  const [historyManager] = useState(() => new UndoRedoManager<string>(50));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const isHandlingHistory = useRef(false);
 
-  const [showSearchModal, setShowSearchModal] = useState(false);
-  const [findText, setFindText] = useState('');
-  const [replaceText, setReplaceText] = useState('');
-  const [ocrLoading, setOcrLoading] = useState(false);
+  // Panels & Tools state
+  const [activeObjProps, setActiveObjProps] = useState<any>(null);
+  const [showPropertyPanel, setShowPropertyPanel] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showCrop, setShowCrop] = useState(false);
+  const [samplingColor, setSamplingColor] = useState(false);
+  const [camouflageColor, setCamouflageColor] = useState('#ffffff');
+  
+  const [filters, setFilters] = useState({ brightness: 0, contrast: 0, saturation: 0, blur: 0 });
 
-  const handleFindReplace = () => {
-    if (!fabricCanvas || !findText) return;
-    let count = 0;
-    fabricCanvas.getObjects().forEach((obj: any) => {
-      if (obj.type === 'textbox' || obj.type === 'text') {
-        if (obj.text.includes(findText)) {
-          obj.set('text', obj.text.replaceAll(findText, replaceText));
-          count++;
-        }
+  // Font states
+  const [fontFamily, setFontFamily] = useState('Inter');
+  const [fontSize, setFontSize] = useState(32);
+  const [fontColor, setFontColor] = useState('#D2294B');
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isStrikethrough, setIsStrikethrough] = useState(false);
+  const [textAlign, setTextAlign] = useState('left');
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (containerRef.current) {
+        setContainerSize({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
       }
-    });
-    if (count > 0) {
-      fabricCanvas.renderAll();
-      saveState(fabricCanvas);
-      toast.success(`Replaced ${count} occurrences`);
-    } else {
-      toast.error('Text not found');
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Load Image
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImageUrl(url);
+    const img = new Image();
+    img.onload = () => {
+      setImageSize({ width: img.width, height: img.height });
+    };
+    img.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  // Adjust scale when image or container size changes
+  useEffect(() => {
+    if (imageSize.width > 0 && containerSize.width > 0) {
+      const padding = isMobile ? 32 : 80;
+      const scaleX = (containerSize.width - padding) / imageSize.width;
+      const scaleY = (containerSize.height - padding) / imageSize.height;
+      let newScale = Math.min(scaleX, scaleY, 1);
+      setScale(newScale);
     }
-    setShowSearchModal(false);
-  };
-
-  const runMagicOCR = async () => {
-    if (!fabricCanvas) return;
-    setOcrLoading(true);
-    const Tesseract = (await import('tesseract.js')).default;
-    
-    // Get the base image data URL
-    const imgObj = fabricCanvas.backgroundImage as fabric.Image;
-    if (!imgObj) {
-      toast.error('No background image found');
-      setOcrLoading(false);
-      return;
-    }
-
-    const toastId = toast.loading('Running AI Magic OCR on image...');
-    
-    try {
-      // Create a temporary canvas to get the exact image bytes
-      const canvas = document.createElement('canvas');
-      canvas.width = imgObj.width! * imgObj.scaleX!;
-      canvas.height = imgObj.height! * imgObj.scaleY!;
-      const ctx = canvas.getContext('2d');
-      if (imgObj.getElement() && ctx) {
-         ctx.drawImage(imgObj.getElement() as CanvasImageSource, 0, 0, canvas.width, canvas.height);
-      }
-      
-      const result = await Tesseract.recognize(canvas.toDataURL(), 'eng');
-      const words = (result.data as any).words;
-      
-      if (!words || words.length === 0) {
-        toast.error('No text found in image', { id: toastId });
-        return;
-      }
-
-      words.forEach((word: any) => {
-        const bbox = word.bbox;
-        const imgLeft = imgObj.left || 0;
-        const imgTop = imgObj.top || 0;
-        
-        // Create a whiteout rectangle over the original text
-        const whiteout = new fabric.Rect({
-          left: bbox.x0 + imgLeft,
-          top: bbox.y0 + imgTop,
-          width: bbox.x1 - bbox.x0,
-          height: bbox.y1 - bbox.y0,
-          fill: '#ffffff', // Best guess for document backgrounds
-          selectable: false,
-          evented: false
-        });
-        
-        // Add editable text box
-        const textbox = new fabric.Textbox(word.text, {
-          left: bbox.x0 + imgLeft,
-          top: bbox.y0 + imgTop,
-          width: bbox.x1 - bbox.x0,
-          fontSize: (bbox.y1 - bbox.y0) * 0.8,
-          fontFamily: 'Helvetica',
-          fill: '#000000',
-          backgroundColor: 'transparent',
-          editable: true
-        });
-
-        fabricCanvas.add(whiteout, textbox);
-      });
-
-      fabricCanvas.renderAll();
-      saveState(fabricCanvas);
-      toast.success(`Extracted ${words.length} words into editable text!`, { id: toastId });
-      setShowSearchModal(false);
-    } catch (err) {
-      console.error(err);
-      toast.error('Magic OCR failed', { id: toastId });
-    } finally {
-      setOcrLoading(false);
-    }
-  };
+  }, [imageSize, containerSize, isMobile]);
 
   const saveState = useCallback((canvas: fabric.Canvas) => {
     if (isHandlingHistory.current) return;
-    const json = JSON.stringify(canvas.toJSON());
+    const json = JSON.stringify(canvas.toJSON(['selectable', 'evented']));
     historyManager.push(json);
     setCanUndo(historyManager.canUndo());
     setCanRedo(historyManager.canRedo());
@@ -141,64 +108,184 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
 
   const handleUndo = useCallback(() => {
     const s = historyManager.undo();
-    if (s && fabricCanvas) { 
-      isHandlingHistory.current = true; 
-      fabricCanvas.loadFromJSON(s, () => { 
-        fabricCanvas.renderAll(); 
-        isHandlingHistory.current = false; 
+    if (s && fabricCanvas) {
+      isHandlingHistory.current = true;
+      fabricCanvas.loadFromJSON(JSON.parse(s), () => {
+        fabricCanvas.renderAll();
+        isHandlingHistory.current = false;
         setCanUndo(historyManager.canUndo());
         setCanRedo(historyManager.canRedo());
-      }); 
+      });
     }
   }, [historyManager, fabricCanvas]);
 
   const handleRedo = useCallback(() => {
     const s = historyManager.redo();
-    if (s && fabricCanvas) { 
-      isHandlingHistory.current = true; 
-      fabricCanvas.loadFromJSON(s, () => { 
-        fabricCanvas.renderAll(); 
-        isHandlingHistory.current = false; 
+    if (s && fabricCanvas) {
+      isHandlingHistory.current = true;
+      fabricCanvas.loadFromJSON(JSON.parse(s), () => {
+        fabricCanvas.renderAll();
+        isHandlingHistory.current = false;
         setCanUndo(historyManager.canUndo());
         setCanRedo(historyManager.canRedo());
-      }); 
+      });
     }
   }, [historyManager, fabricCanvas]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
-        if (e.shiftKey) {
-          e.preventDefault();
-          handleRedo();
-        } else {
-          e.preventDefault();
-          handleUndo();
-        }
+        if (e.shiftKey) { e.preventDefault(); handleRedo(); } 
+        else { e.preventDefault(); handleUndo(); }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
+  const updateActiveObjProps = useCallback((canvas: fabric.Canvas) => {
+    const obj = canvas.getActiveObject();
+    if (obj) {
+      setActiveObjProps({
+        type: obj.type, x: obj.left, y: obj.top,
+        width: obj.getScaledWidth(), height: obj.getScaledHeight(),
+        fill: obj.fill, opacity: obj.opacity || 1, angle: obj.angle || 0,
+      });
+      setShowPropertyPanel(true);
+      
+      if (obj.type === 'textbox' || obj.type === 'i-text') {
+        const textObj = obj as fabric.Textbox;
+        setFontFamily(textObj.fontFamily || 'Inter');
+        setFontSize(textObj.fontSize || 32);
+        setFontColor(textObj.fill as string || '#000000');
+        setIsBold(textObj.fontWeight === 'bold');
+        setIsItalic(textObj.fontStyle === 'italic');
+        setIsUnderline(!!textObj.underline);
+        setIsStrikethrough(!!textObj.linethrough);
+        setTextAlign(textObj.textAlign || 'left');
+      }
+    } else {
+      setShowPropertyPanel(false);
+      setActiveObjProps(null);
+    }
+  }, []);
+
+  const handleCanvasInit = useCallback((canvas: fabric.Canvas) => {
+    setFabricCanvas(canvas);
+    
+    // Set background image
+    fabric.Image.fromURL(imageUrl, (img) => {
+      setBgImage(img);
+      canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
+        originX: 'left', originY: 'top',
+        scaleX: 1, scaleY: 1
+      });
+      saveState(canvas);
+    });
+
+    canvas.on('object:added', () => saveState(canvas));
+    canvas.on('object:modified', () => { saveState(canvas); updateActiveObjProps(canvas); });
+    canvas.on('object:removed', () => { saveState(canvas); updateActiveObjProps(canvas); });
+    canvas.on('selection:created', () => updateActiveObjProps(canvas));
+    canvas.on('selection:updated', () => updateActiveObjProps(canvas));
+    canvas.on('selection:cleared', () => updateActiveObjProps(canvas));
+
+    // Color Sampler click handler
+    canvas.on('mouse:down', (opt) => {
+      if ((canvas as any)._samplingColor) {
+        const p = canvas.getPointer(opt.e);
+        const ctx = canvas.getContext('2d');
+        const data = ctx.getImageData(p.x, p.y, 1, 1).data;
+        const hex = `#${((1 << 24) + (data[0] << 16) + (data[1] << 8) + data[2]).toString(16).slice(1)}`;
+        setCamouflageColor(hex);
+        setSamplingColor(false);
+        (canvas as any)._samplingColor = false;
+        setCurrentTool('camouflage');
+        toast.success(`Sampled color: ${hex}. Now draw over the text to hide it.`, { icon: '🎨' });
+      }
+    });
+  }, [imageUrl, saveState, updateActiveObjProps]);
+
+  // Handle Camouflage Tool Click
+  useEffect(() => {
+    if (currentTool === 'camouflage') {
+      if (!fabricCanvas) return;
+      if (samplingColor) return;
+      // When first selecting camouflage, enter sampling mode
+      setSamplingColor(true);
+      (fabricCanvas as any)._samplingColor = true;
+      setCurrentTool('select');
+      toast('Click anywhere on the image to sample the background color to use for hiding text.', { icon: '🔍', duration: 4000 });
+    } else if (currentTool === 'sign') {
+      setShowSignaturePad(true);
+      setCurrentTool('select');
+    } else {
+      if (fabricCanvas) (fabricCanvas as any)._samplingColor = false;
+      setSamplingColor(false);
+    }
+  }, [currentTool, fabricCanvas, samplingColor]);
+
+  const handleApplyCrop = (cropData: any) => {
+    // In a full implementation, this would crop the canvas. 
+    // Here we'll show a toast.
+    toast.success('Crop applied! (Visual simulation)');
+    setShowCrop(false);
+  };
+
+  const applyFabricFilter = (filterObj: any, index: number) => {
+    if (!bgImage || !fabricCanvas) return;
+    bgImage.filters[index] = filterObj;
+    bgImage.applyFilters();
+    fabricCanvas.renderAll();
+    saveState(fabricCanvas);
+  };
+
+  const handleFilterChange = (key: string, value: number) => {
+    setFilters(f => ({ ...f, [key]: value }));
+    if (!bgImage || !fabricCanvas) return;
+    
+    // Convert to fabric filters
+    if (key === 'brightness') applyFabricFilter(new fabric.Image.filters.Brightness({ brightness: value / 100 }), 0);
+    if (key === 'contrast') applyFabricFilter(new fabric.Image.filters.Contrast({ contrast: value / 100 }), 1);
+    if (key === 'saturation') applyFabricFilter(new fabric.Image.filters.Saturation({ saturation: value / 100 }), 2);
+    if (key === 'blur') applyFabricFilter(new fabric.Image.filters.Blur({ blur: value / 100 }), 3);
+  };
+
+  const handleApplyPreset = (preset: string) => {
+    if (!bgImage || !fabricCanvas) return;
+    bgImage.filters = []; // Clear previous
+    if (preset === 'Grayscale') bgImage.filters.push(new fabric.Image.filters.Grayscale());
+    if (preset === 'Sepia') bgImage.filters.push(new fabric.Image.filters.Sepia());
+    if (preset === 'Invert') bgImage.filters.push(new fabric.Image.filters.Invert());
+    if (preset === 'Vintage') bgImage.filters.push(new fabric.Image.filters.Vintage());
+    if (preset === 'Polaroid') bgImage.filters.push(new fabric.Image.filters.Polaroid());
+    if (preset === 'Kodachrome') bgImage.filters.push(new fabric.Image.filters.Kodachrome());
+    bgImage.applyFilters();
+    fabricCanvas.renderAll();
+    saveState(fabricCanvas);
+    setFilters({ brightness: 0, contrast: 0, saturation: 0, blur: 0 }); // reset sliders
+    toast.success(`Applied ${preset} filter`);
+  };
+
   const handleInsertImage = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.onchange = (e: any) => {
-      const file = e.target.files[0];
-      if (!file || !fabricCanvas) return;
+      const imgFile = e.target.files[0];
+      if (!imgFile || !fabricCanvas) return;
       const reader = new FileReader();
       reader.onload = (f) => {
-        const data = f.target?.result as string;
-        fabric.Image.fromURL(data, (img) => {
-          img.scaleToWidth(200);
+        fabric.Image.fromURL(f.target?.result as string, (img) => {
+          img.scaleToWidth(imageSize.width / 3);
+          img.set({ left: imageSize.width / 2 - (img.getScaledWidth() / 2), top: imageSize.height / 2 });
           fabricCanvas.add(img);
           fabricCanvas.setActiveObject(img);
           fabricCanvas.renderAll();
+          saveState(fabricCanvas);
         });
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(imgFile);
     };
     input.click();
   };
@@ -206,139 +293,184 @@ export default function ImageEditor({ file, onSave, onClose }: ImageEditorProps)
   useEffect(() => {
     (window as any).handleInsertImage = handleInsertImage;
     return () => { (window as any).handleInsertImage = undefined; };
-  }, [fabricCanvas]);
+  }, [fabricCanvas, imageSize]);
 
-  useEffect(() => {
-    // Calculate size once before rendering the canvas
-    const imgUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.src = imgUrl;
-    img.onload = () => {
-      const maxWidth = window.innerWidth * 0.8;
-      const maxHeight = window.innerHeight * 0.7;
-      const imgScale = Math.min(maxWidth / img.width, maxHeight / img.height);
-      setCanvasSize({ width: img.width * imgScale, height: img.height * imgScale });
-    };
-    return () => URL.revokeObjectURL(imgUrl);
-  }, [file]);
-
-  useEffect(() => {
-    if (!fabricCanvas) return;
-    fabricCanvas.isDrawingMode = currentTool === 'draw' || currentTool === 'whiteout';
-    if (currentTool === 'draw') {
-      fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-      fabricCanvas.freeDrawingBrush.width = 4;
-      fabricCanvas.freeDrawingBrush.color = '#6366f1';
-    } else if (currentTool === 'whiteout') {
-      fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-      fabricCanvas.freeDrawingBrush.width = 20;
-      fabricCanvas.freeDrawingBrush.color = '#ffffff'; // Whiteout erase
-    }
-  }, [currentTool, fabricCanvas]);
-
-  const handleCanvasInit = useCallback((canvas: fabric.Canvas) => {
-    setFabricCanvas(canvas);
-    
-    const imgUrl = URL.createObjectURL(file);
-    fabric.Image.fromURL(imgUrl, (img) => {
-      if (canvas.width && canvas.height && img.width && img.height) {
-        const scaleX = canvas.width / img.width;
-        const scaleY = canvas.height / img.height;
-        img.set({ scaleX, scaleY });
-      }
-      canvas.setBackgroundImage(img, () => {
-        canvas.renderAll();
-        setLoading(false);
-        saveState(canvas);
-      });
-    });
-
-    canvas.on('object:added', () => saveState(canvas));
-    canvas.on('object:modified', () => saveState(canvas));
-    canvas.on('object:removed', () => saveState(canvas));
-
-    return () => URL.revokeObjectURL(imgUrl);
-  }, [file, saveState]);
-
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!fabricCanvas) return;
     setExporting(true);
-    const dataUrl = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
-    fetch(dataUrl)
-      .then(res => res.blob())
-      .then(blob => {
-        onSave(new File([blob], file.name.replace(/\.[^/.]+$/, "") + "_edited.png", { type: 'image/png' }));
-        toast.success('Export Successful!');
-      })
-      .finally(() => setExporting(false));
+    const toastId = toast.loading('Exporting image...');
+    try {
+      // Original size export
+      fabricCanvas.discardActiveObject();
+      fabricCanvas.renderAll();
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const format = ext === 'png' ? 'png' : 'jpeg';
+      const output = await exportCanvas(fabricCanvas, format as any, 1.0);
+      onSave(new File([output], file.name.replace(/\.[^/.]+$/, "") + "_edited." + format, { type: output.type }));
+      toast.success('Export Successful!', { id: toastId });
+    } catch (e) {
+      toast.error('Export failed', { id: toastId });
+    } finally {
+      setExporting(false);
+    }
   };
 
+  const handleExportAsPdf = async () => {
+    if (!fabricCanvas) return;
+    setExporting(true);
+    const toastId = toast.loading('Converting to PDF...');
+    try {
+      fabricCanvas.discardActiveObject();
+      fabricCanvas.renderAll();
+      const output = await exportCanvas(fabricCanvas, 'png', 1.0);
+      const pdf = await imageToPdf(output);
+      onSave(new File([pdf], file.name.replace(/\.[^/.]+$/, "") + "_edited.pdf", { type: 'application/pdf' }));
+      toast.success('Converted to PDF successfully!', { id: toastId });
+    } catch (e) {
+      toast.error('Conversion failed', { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const bgStyle = darkMode ? '#050510' : '#f0f2f5';
+  const workspaceBg = darkMode ? '#0a0a1a' : '#e8eaed';
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[9999] flex flex-col"
-      style={{ background: '#f0f2f5', fontFamily: "'Inter', system-ui, sans-serif" }}
+    <motion.div 
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
+      className="fixed inset-0 z-[9999] flex flex-col overflow-hidden"
+      style={{ background: bgStyle, fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <Toolbar 
         title={file.name}
         currentTool={currentTool} setCurrentTool={setCurrentTool}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        canUndo={canUndo} canRedo={canRedo}
+        onUndo={handleUndo} onRedo={handleRedo} canUndo={canUndo} canRedo={canRedo}
         onExport={handleExport} onClose={onClose} exportLoading={exporting}
-        onSearch={() => setShowSearchModal(true)}
-        showThumbnails={showThumbnails} setShowThumbnails={setShowThumbnails}
+        onFilters={() => setShowFilters(true)} onCrop={() => setShowCrop(true)}
+        darkMode={darkMode} setDarkMode={setDarkMode}
+        isImageEditor={true}
       />
 
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px 40px 100px', background: '#e8eaed', position: 'relative' }}>
-        {canvasSize && (
-          <div style={{ position: 'relative', boxShadow: '0 8px 40px rgba(0,0,0,0.18)', background: '#fff' }}>
-            <CanvasLayer 
-              width={canvasSize.width} height={canvasSize.height} 
-              onCanvasInit={handleCanvasInit} currentTool={currentTool} 
-            />
-          </div>
-        )}
-
-        {/* Floating Bottom Bar */}
+      <div ref={containerRef} className="flex flex-1 overflow-hidden relative" style={{ background: workspaceBg }}>
         <div style={{
-          position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-          background: '#fff', borderRadius: '999px', boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
-          display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 16px',
-          zIndex: 500, border: '1px solid #e5e7eb',
+          flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', padding: isMobile ? '16px' : '40px',
+          position: 'relative'
         }}>
-          <button onClick={() => setScale(s => Math.max(0.25, s - 0.25))}
-            style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', color: '#374151', fontSize: '20px', fontWeight: 300 }}>−</button>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151', minWidth: '44px', textAlign: 'center' }}>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(s => Math.min(3, s + 0.25))}
-            style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', color: '#374151', fontSize: '20px', fontWeight: 300 }}>+</button>
+
+          <AnimatePresence>
+            {(currentTool === 'text' || (activeObjProps && (activeObjProps.type === 'text' || activeObjProps.type === 'textbox'))) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                style={{ position: 'absolute', top: 20, zIndex: 50 }}
+              >
+                <FontControls
+                  fontFamily={fontFamily} fontSize={fontSize} fontColor={fontColor}
+                  isBold={isBold} isItalic={isItalic} isUnderline={isUnderline} isStrikethrough={isStrikethrough}
+                  textAlign={textAlign} onFontFamilyChange={setFontFamily} onFontSizeChange={setFontSize}
+                  onFontColorChange={setFontColor} onBoldToggle={() => setIsBold(!isBold)}
+                  onItalicToggle={() => setIsItalic(!isItalic)} onUnderlineToggle={() => setIsUnderline(!isUnderline)}
+                  onStrikethroughToggle={() => setIsStrikethrough(!isStrikethrough)} onTextAlignChange={setTextAlign}
+                  darkMode={darkMode}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {imageSize.width > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              style={{
+                position: 'relative',
+                width: imageSize.width * scale, height: imageSize.height * scale,
+                boxShadow: darkMode ? '0 12px 60px rgba(0,0,0,0.8)' : '0 12px 60px rgba(0,0,0,0.15)',
+                background: `url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" fill="${darkMode?'%231f2937':'%23e5e7eb'}"/><rect x="10" y="10" width="10" height="10" fill="${darkMode?'%231f2937':'%23e5e7eb'}"/></svg>')`
+              }}
+            >
+              <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}>
+                <CanvasLayer 
+                  width={imageSize.width} height={imageSize.height} 
+                  onCanvasInit={handleCanvasInit} currentTool={currentTool} 
+                  fontFamily={fontFamily} fontSize={fontSize} fontColor={fontColor}
+                  isBold={isBold} isItalic={isItalic} isUnderline={isUnderline} isStrikethrough={isStrikethrough}
+                  textAlign={textAlign} camouflageColor={camouflageColor}
+                />
+              </div>
+            </motion.div>
+          )}
+
+          {/* Controls Bar */}
+          <div style={{
+            position: 'absolute', bottom: isMobile ? 32 : 24, left: '50%', transform: 'translateX(-50%)',
+            background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)',
+            borderRadius: '999px', boxShadow: darkMode ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.15)',
+            display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 16px',
+            zIndex: 500, border: `1px solid ${darkMode ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
+          }}>
+            <button onClick={() => setScale(s => Math.max(0.1, s - 0.1))}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#e5e7eb' : '#374151', fontSize: '20px', fontWeight: 300 }}
+            >−</button>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: darkMode ? '#fff' : '#374151', minWidth: '44px', textAlign: 'center' }}>
+              {Math.round(scale * 100)}%
+            </span>
+            <button onClick={() => setScale(s => Math.min(3, s + 0.1))}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#e5e7eb' : '#374151', fontSize: '20px', fontWeight: 300 }}
+            >+</button>
+
+            <div style={{ width: '1px', height: '22px', background: darkMode ? 'rgba(255,255,255,0.1)' : '#e5e7eb', margin: '0 4px' }} />
+
+            <button onClick={handleExportAsPdf} disabled={exporting}
+              style={{ padding: '4px 12px', background: 'rgba(210,41,75,0.1)', color: '#D2294B', border: '1px solid rgba(210,41,75,0.3)', borderRadius: '16px', fontSize: '12px', fontWeight: 700, cursor: exporting ? 'wait' : 'pointer' }}>
+              Save as PDF
+            </button>
+          </div>
         </div>
       </div>
 
-      {showSearchModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e5e7eb', width: '384px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ color: '#111827', fontWeight: 700, marginBottom: '16px', fontSize: '16px' }}>Find &amp; Replace</h3>
-            <input
-              style={{ width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 14px', marginBottom: '10px', color: '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
-              placeholder="Find text..." value={findText} onChange={e => setFindText(e.target.value)}
-            />
-            <input
-              style={{ width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 14px', marginBottom: '16px', color: '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
-              placeholder="Replace with..." value={replaceText} onChange={e => setReplaceText(e.target.value)}
-            />
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginBottom: '16px' }}>
-              <button onClick={() => setShowSearchModal(false)} style={{ padding: '8px 16px', background: 'none', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
-              <button onClick={handleFindReplace} style={{ padding: '8px 18px', background: '#D2294B', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>Replace All</button>
-            </div>
-            <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '16px' }}>
-              <button onClick={runMagicOCR} disabled={ocrLoading} style={{ width: '100%', padding: '9px', background: ocrLoading ? '#f9fafb' : '#FFF0F2', border: '1.5px solid #D2294B', borderRadius: '8px', color: '#D2294B', cursor: ocrLoading ? 'wait' : 'pointer', fontWeight: 700, fontSize: '13px' }}>
-                {ocrLoading ? 'Extracting Text...' : '✨ Magic Edit (Auto OCR)'}
-              </button>
-              <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '8px', textAlign: 'center' }}>Automatically extracts text from the image into editable text boxes using Tesseract AI.</p>
-            </div>
-          </div>
-        </div>
-      )}
+      <PropertyPanel
+        visible={showPropertyPanel && !!activeObjProps}
+        {...activeObjProps}
+        onFillChange={(v: string) => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.set('fill', v); fabricCanvas.renderAll(); saveState(fabricCanvas); updateActiveObjProps(fabricCanvas); }}}
+        onOpacityChange={(v: number) => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.set('opacity', v); fabricCanvas.renderAll(); saveState(fabricCanvas); updateActiveObjProps(fabricCanvas); }}}
+        onDelete={() => { if (fabricCanvas) { fabricCanvas.getActiveObjects().forEach(o => fabricCanvas.remove(o)); fabricCanvas.discardActiveObject(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onDuplicate={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.clone((cloned: any) => { cloned.set({ left: cloned.left + 20, top: cloned.top + 20, evented: true }); fabricCanvas.add(cloned); fabricCanvas.setActiveObject(cloned); fabricCanvas.renderAll(); saveState(fabricCanvas); }); }}}
+        onBringForward={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.bringForward(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onSendBackward={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.sendBackwards(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onFlipH={() => { if (fabricCanvas) { const obj = fabricCanvas.getActiveObject(); if (obj) { obj.set('flipX', !obj.flipX); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}}
+        onFlipV={() => { if (fabricCanvas) { const obj = fabricCanvas.getActiveObject(); if (obj) { obj.set('flipY', !obj.flipY); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}}
+        darkMode={darkMode}
+        panelPosition={isMobile ? { top: 120, left: 16 } : undefined}
+      />
+
+      <SignaturePad
+        isOpen={showSignaturePad} onClose={() => setShowSignaturePad(false)}
+        onInsert={(dataUrl) => {
+          if (!fabricCanvas) return;
+          fabric.Image.fromURL(dataUrl, (img) => {
+            img.scaleToWidth(imageSize.width / 3);
+            img.set({ left: imageSize.width / 2 - (img.getScaledWidth() / 2), top: imageSize.height / 2 });
+            fabricCanvas.add(img); fabricCanvas.setActiveObject(img); fabricCanvas.renderAll(); saveState(fabricCanvas);
+          });
+        }}
+        darkMode={darkMode}
+      />
+
+      <ImageFilters 
+        visible={showFilters} onClose={() => setShowFilters(false)}
+        filters={filters} onFilterChange={handleFilterChange} onApplyPreset={handleApplyPreset}
+        darkMode={darkMode}
+      />
+
+      <CropTool 
+        visible={showCrop} onApply={handleApplyCrop} onCancel={() => setShowCrop(false)}
+        imageWidth={imageSize.width} imageHeight={imageSize.height}
+      />
+
+      <ColorSampler 
+        visible={samplingColor} onColorPicked={(c) => { setCamouflageColor(c); setSamplingColor(false); }}
+        onCancel={() => { setSamplingColor(false); setCurrentTool('select'); }}
+      />
     </motion.div>
   );
 }

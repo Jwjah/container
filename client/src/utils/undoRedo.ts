@@ -1,9 +1,9 @@
 export class UndoRedoManager<T> {
   private history: T[] = [];
   private index: number = -1;
-  private maxHistory: number = 50;
+  private maxHistory: number = 100;
 
-  constructor(maxHistory = 50) {
+  constructor(maxHistory = 100) {
     this.maxHistory = maxHistory;
   }
 
@@ -45,5 +45,18 @@ export class UndoRedoManager<T> {
 
   getCurrentState(): T | null {
     return this.index >= 0 ? this.history[this.index] : null;
+  }
+
+  clear() {
+    this.history = [];
+    this.index = -1;
+  }
+
+  getHistoryLength(): number {
+    return this.history.length;
+  }
+
+  getIndex(): number {
+    return this.index;
   }
 }

@@ -20,13 +20,13 @@ export default function PdfViewer({
   pdfUrl, currentPage, scale, onLoadSuccess, onPageLoadSuccess, children 
 }: PdfViewerProps) {
   return (
-    <div style={{ position: 'relative', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+    <div style={{ position: 'relative' }}>
       <Document file={pdfUrl} onLoadSuccess={onLoadSuccess}>
         <div style={{ position: 'relative' }}>
           <Page 
             pageNumber={currentPage} 
             scale={scale} 
-            renderTextLayer={true} 
+            renderTextLayer={false} 
             renderAnnotationLayer={false}
             onLoadSuccess={onPageLoadSuccess}
           />
@@ -34,7 +34,7 @@ export default function PdfViewer({
         </div>
       </Document>
       <style jsx global>{`
-        .textLayer { z-index: 1; }
+        .textLayer { display: none; }
         .canvas-container { margin: 0 auto !important; }
       `}</style>
     </div>

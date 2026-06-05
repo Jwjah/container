@@ -6,12 +6,12 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { fabric } from 'fabric';
 import toast from 'react-hot-toast';
 
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
-
 import Toolbar from './Editor/Toolbar';
 import PdfViewer from './Editor/PdfViewer';
 import CanvasLayer from './Editor/CanvasLayer';
+import FontControls from './Editor/FontControls';
+import PropertyPanel from './Editor/PropertyPanel';
+import SignaturePad from './Editor/SignaturePad';
 import { UndoRedoManager } from '@/utils/undoRedo';
 import {
   groupTextItems,
@@ -35,13 +35,15 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
   const [scale, setScale] = useState(1.0);
   const [pageSize, setPageSize] = useState({ width: 0, height: 0 });
   const [currentTool, setCurrentTool] = useState('select');
-  const [showThumbnails, setShowThumbnails] = useState(true);
+  const [showThumbnails, setShowThumbnails] = useState(false); // Default hidden on mobile
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
   const [annotations, setAnnotations] = useState<Record<number, any>>({});
-  const [historyManager] = useState(() => new UndoRedoManager<string>());
+  const [historyManager] = useState(() => new UndoRedoManager<string>(100));
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   
@@ -54,6 +56,29 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
   const [scannedPages, setScannedPages] = useState<Set<number>>(new Set());
   const [showOcrBanner, setShowOcrBanner] = useState(false);
   const pageRef = useRef<any>(null);
+
+  // Active object properties
+  const [activeObjProps, setActiveObjProps] = useState<any>(null);
+  const [showPropertyPanel, setShowPropertyPanel] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+
+  // Font states
+  const [fontFamily, setFontFamily] = useState('Helvetica');
+  const [fontSize, setFontSize] = useState(16);
+  const [fontColor, setFontColor] = useState('#000000');
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const [isUnderline, setIsUnderline] = useState(false);
+  const [isStrikethrough, setIsStrikethrough] = useState(false);
+  const [textAlign, setTextAlign] = useState('left');
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    setShowThumbnails(window.innerWidth >= 768); // Show by default on desktop
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleFindReplace = () => {
     if (!fabricCanvas || !findText) return;
@@ -89,7 +114,6 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
     return () => URL.revokeObjectURL(pdfUrl);
   }, [file]);
 
-  // Use refs to avoid stale closures in canvas event handlers
   const annotationsRef = useRef(annotations);
   annotationsRef.current = annotations;
   const currentPageRef = useRef(currentPage);
@@ -170,16 +194,52 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
-  // handleCanvasInit must NOT depend on saveState to avoid re-creating canvas
+  const updateActiveObjProps = useCallback((canvas: fabric.Canvas) => {
+    const obj = canvas.getActiveObject();
+    if (obj) {
+      setActiveObjProps({
+        type: obj.type,
+        x: obj.left, y: obj.top,
+        width: obj.getScaledWidth(), height: obj.getScaledHeight(),
+        fill: obj.fill, opacity: obj.opacity || 1, angle: obj.angle || 0,
+      });
+      setShowPropertyPanel(true);
+      
+      if (obj.type === 'textbox' || obj.type === 'i-text') {
+        const textObj = obj as fabric.Textbox;
+        setFontFamily(textObj.fontFamily || 'Helvetica');
+        setFontSize(textObj.fontSize || 16);
+        setFontColor(textObj.fill as string || '#000000');
+        setIsBold(textObj.fontWeight === 'bold');
+        setIsItalic(textObj.fontStyle === 'italic');
+        setIsUnderline(!!textObj.underline);
+        setIsStrikethrough(!!textObj.linethrough);
+        setTextAlign(textObj.textAlign || 'left');
+      }
+    } else {
+      setShowPropertyPanel(false);
+      setActiveObjProps(null);
+    }
+  }, []);
+
   const saveStateRef = useRef(saveState);
   saveStateRef.current = saveState;
 
   const handleCanvasInit = useCallback((canvas: fabric.Canvas) => {
     setFabricCanvas(canvas);
     canvas.on('object:added', () => saveStateRef.current(canvas));
-    canvas.on('object:modified', () => saveStateRef.current(canvas));
-    canvas.on('object:removed', () => saveStateRef.current(canvas));
-  }, []); // Empty deps — canvas never re-creates
+    canvas.on('object:modified', () => {
+      saveStateRef.current(canvas);
+      updateActiveObjProps(canvas);
+    });
+    canvas.on('object:removed', () => {
+      saveStateRef.current(canvas);
+      updateActiveObjProps(canvas);
+    });
+    canvas.on('selection:created', () => updateActiveObjProps(canvas));
+    canvas.on('selection:updated', () => updateActiveObjProps(canvas));
+    canvas.on('selection:cleared', () => updateActiveObjProps(canvas));
+  }, [updateActiveObjProps]);
 
   // Page Change Effect
   useEffect(() => {
@@ -199,11 +259,17 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
           isHandlingHistory.current = false;
         }
       } catch (err) {
-        console.warn('Canvas clear error:', err);
         isHandlingHistory.current = false;
       }
     }
   }, [currentPage, fabricCanvas, annotations]);
+
+  useEffect(() => {
+    if (currentTool === 'sign') {
+      setShowSignaturePad(true);
+      setCurrentTool('select');
+    }
+  }, [currentTool]);
 
   const onPageLoadSuccess = async (page: any) => {
     const viewport = page.getViewport({ scale });
@@ -284,7 +350,6 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
       setShowOcrBanner(false);
       toast.success(`Extracted ${blocks.length} text blocks via OCR!`, { id: toastId });
     } catch (err) {
-      console.error('OCR failed:', err);
       toast.error('OCR failed — try again', { id: toastId });
     } finally {
       setOcrRunning(false);
@@ -319,15 +384,12 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
     return () => { (window as any).handleInsertImage = undefined; };
   }, [fabricCanvas]);
 
-  // Tool switching is handled entirely by CanvasLayer — no duplicate logic here
-
   const handleExport = async () => {
     if (!pdfBytes) return;
     setExporting(true);
     const toastId = toast.loading('Exporting document...');
     try {
       const pdfDoc = await PDFDocument.load(pdfBytes);
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const pages = pdfDoc.getPages();
 
       for (let i = 0; i < pages.length; i++) {
@@ -336,7 +398,6 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
         const page = pages[i];
         const { width, height } = page.getSize();
         
-        // Use a default size if pageSize is not yet set (should not happen in practice)
         const renderedWidth = pageSize.width || width;
         const renderedHeight = pageSize.height || height;
         
@@ -347,6 +408,7 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
           const x = obj.left * scaleX;
           const y = (renderedHeight / scale - obj.top) * scaleY;
           if (obj.type === 'textbox' || obj.type === 'text') {
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
             page.drawText(obj.text, { 
                 x, y: y - (obj.fontSize * scaleY), 
                 size: obj.fontSize * scaleY, font, color: rgb(0,0,0) 
@@ -355,14 +417,15 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
             page.drawRectangle({ 
                 x, y: y - (obj.height * scaleY), 
                 width: obj.width * scaleX, height: obj.height * scaleY, 
-                color: obj.fill === 'black' ? rgb(0,0,0) : rgb(1,1,1) 
+                color: obj.fill === 'transparent' ? undefined : (obj.fill === '#ffffff' || obj.fill === 'white' ? rgb(1,1,1) : rgb(0,0,0)),
+                borderWidth: obj.stroke ? obj.strokeWidth : 0,
             });
           }
         }
       }
 
       const bytes = await pdfDoc.save();
-      onSave(new File([bytes as any], file.name.replace(/\\.[^/.]+$/, "") + "_edited.pdf", { type: 'application/pdf' }));
+      onSave(new File([bytes as any], file.name.replace(/\.[^/.]+$/, "") + "_edited.pdf", { type: 'application/pdf' }));
       toast.success('Export Successful!', { id: toastId });
     } catch (e) {
       toast.error('Export failed', { id: toastId });
@@ -371,70 +434,130 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
     }
   };
 
+  const bgStyle = darkMode ? '#050510' : '#f0f2f5';
+  const workspaceBg = darkMode ? '#0a0a1a' : '#e8eaed';
+
   return (
     <motion.div 
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} 
       className="fixed inset-0 z-[9999] flex flex-col overflow-hidden"
-      style={{ background: '#f0f2f5', fontFamily: "'Inter', system-ui, sans-serif" }}
+      style={{ background: bgStyle, fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       <Toolbar 
         title={file.name}
         currentTool={currentTool} setCurrentTool={setCurrentTool}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        canUndo={canUndo} canRedo={canRedo}
+        onUndo={handleUndo} onRedo={handleRedo} canUndo={canUndo} canRedo={canRedo}
         onExport={handleExport} onClose={onClose} exportLoading={exporting}
-        onSearch={() => setShowSearchModal(true)}
-        onOcr={runOcrOnCurrentPage}
+        onSearch={() => setShowSearchModal(true)} onOcr={runOcrOnCurrentPage}
         showThumbnails={showThumbnails} setShowThumbnails={setShowThumbnails}
+        darkMode={darkMode} setDarkMode={setDarkMode}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Thumbnails Sidebar */}
-        {showThumbnails && (
-          <motion.div 
-            initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
-            style={{ width: '200px', background: '#fff', borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '16px' }}
-            className="custom-scrollbar"
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '4px' }}>
-              <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', fontWeight: 700 }}>Pages</span>
-              <div style={{ height: '1px', background: '#f3f4f6', width: '100%' }} />
-            </div>
-            {pdfUrl && Array.from(new Array(numPages), (_, i) => (
-              <div
-                key={i}
-                onClick={() => setCurrentPage(i + 1)}
-                style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Thumbnails Sidebar / Drawer */}
+        <AnimatePresence>
+          {showThumbnails && (
+            <>
+              {isMobile && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100 }}
+                  onClick={() => setShowThumbnails(false)}
+                />
+              )}
+              <motion.div 
+                initial={{ x: -240 }} animate={{ x: 0 }} exit={{ x: -240 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                style={{
+                  position: isMobile ? 'absolute' : 'relative',
+                  top: 0, bottom: 0, left: 0, zIndex: 101,
+                  width: '200px', background: darkMode ? '#0f0f23' : '#fff',
+                  borderRight: `1px solid ${darkMode ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
+                  overflowY: 'auto', padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '16px'
+                }}
+                className="custom-scrollbar"
+                onClick={e => e.stopPropagation()}
               >
-                <div style={{
-                  width: '100%', aspectRatio: '3/4', borderRadius: '6px', overflow: 'hidden', background: '#fff',
-                  boxShadow: currentPage === i+1 ? '0 0 0 2px #D2294B, 0 4px 12px rgba(0,0,0,0.12)' : '0 1px 4px rgba(0,0,0,0.12)',
-                  transition: 'box-shadow 0.2s',
-                }}>
-                  <div style={{ transform: 'scale(0.25)', transformOrigin: 'top left', width: '400%', height: '400%' }}>
-                    <PdfViewer pdfUrl={pdfUrl} currentPage={i+1} scale={1} onLoadSuccess={()=>{}} onPageLoadSuccess={()=>{}} />
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9ca3af', fontWeight: 700 }}>Pages</span>
+                  {isMobile && (
+                    <button onClick={() => setShowThumbnails(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', padding: 4 }}>✕</button>
+                  )}
                 </div>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: currentPage === i+1 ? '#D2294B' : '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {i + 1}
-                </span>
-              </div>
-            ))}
-          </motion.div>
-        )}
+                {pdfUrl && Array.from(new Array(numPages), (_, i) => (
+                  <div
+                    key={i} onClick={() => { setCurrentPage(i + 1); if(isMobile) setShowThumbnails(false); }}
+                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}
+                  >
+                    <div style={{
+                      width: '100%', aspectRatio: '3/4', borderRadius: '6px', overflow: 'hidden', background: '#fff',
+                      boxShadow: currentPage === i+1 ? '0 0 0 2px #D2294B, 0 4px 12px rgba(0,0,0,0.2)' : '0 1px 4px rgba(0,0,0,0.1)',
+                      transition: 'box-shadow 0.2s',
+                    }}>
+                      <div style={{ transform: 'scale(0.25)', transformOrigin: 'top left', width: '400%', height: '400%', pointerEvents: 'none' }}>
+                        <PdfViewer pdfUrl={pdfUrl} currentPage={i+1} scale={1} onLoadSuccess={()=>{}} onPageLoadSuccess={()=>{}} />
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: currentPage === i+1 ? '#D2294B' : '#9ca3af', textTransform: 'uppercase' }}>
+                      {i + 1}
+                    </span>
+                  </div>
+                ))}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* Main Canvas Area */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '40px 40px 100px', background: '#e8eaed', position: 'relative' }}>
+        <div style={{
+          flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', padding: isMobile ? '20px 10px 100px' : '40px 40px 100px',
+          background: workspaceBg, position: 'relative'
+        }}>
+          {/* Mobile 3-dot menu toggle for thumbnails */}
+          {isMobile && !showThumbnails && (
+            <button
+              onClick={() => setShowThumbnails(true)}
+              style={{
+                position: 'fixed', top: '76px', left: '16px', zIndex: 90,
+                width: 44, height: 44, borderRadius: '50%', background: darkMode ? '#1f2937' : '#fff',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#f3f4f6' : '#374151'
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            </button>
+          )}
+
+          {/* Font Controls Row (if text tool is active or text is selected) */}
+          <AnimatePresence>
+            {(currentTool === 'text' || (activeObjProps && (activeObjProps.type === 'text' || activeObjProps.type === 'textbox'))) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                style={{ position: 'sticky', top: isMobile ? 10 : 20, zIndex: 50, marginBottom: 20 }}
+              >
+                <FontControls
+                  fontFamily={fontFamily} fontSize={fontSize} fontColor={fontColor}
+                  isBold={isBold} isItalic={isItalic} isUnderline={isUnderline} isStrikethrough={isStrikethrough}
+                  textAlign={textAlign} onFontFamilyChange={setFontFamily} onFontSizeChange={setFontSize}
+                  onFontColorChange={setFontColor} onBoldToggle={() => setIsBold(!isBold)}
+                  onItalicToggle={() => setIsItalic(!isItalic)} onUnderlineToggle={() => setIsUnderline(!isUnderline)}
+                  onStrikethroughToggle={() => setIsStrikethrough(!isStrikethrough)} onTextAlignChange={setTextAlign}
+                  darkMode={darkMode}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence mode="wait">
             {!loading && pdfUrl && (
               <motion.div 
                 key={currentPage}
                 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-                style={{ position: 'relative', boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}
+                style={{ position: 'relative', boxShadow: darkMode ? '0 8px 40px rgba(0,0,0,0.6)' : '0 8px 40px rgba(0,0,0,0.18)', transition: 'transform 0.2s' }}
               >
                 <PdfViewer 
-                  pdfUrl={pdfUrl} currentPage={currentPage} scale={scale} 
+                  pdfUrl={pdfUrl} currentPage={currentPage} scale={isMobile ? Math.min(scale, (window.innerWidth - 32) / (pageSize.width || window.innerWidth)) : scale} 
                   onLoadSuccess={({numPages}: {numPages: number}) => setNumPages(numPages)}
                   onPageLoadSuccess={onPageLoadSuccess}
                 >
@@ -442,6 +565,9 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
                     <CanvasLayer 
                       width={pageSize.width} height={pageSize.height} 
                       onCanvasInit={handleCanvasInit} currentTool={currentTool} 
+                      fontFamily={fontFamily} fontSize={fontSize} fontColor={fontColor}
+                      isBold={isBold} isItalic={isItalic} isUnderline={isUnderline} isStrikethrough={isStrikethrough}
+                      textAlign={textAlign}
                     />
                   )}
                 </PdfViewer>
@@ -451,51 +577,73 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
 
           {/* ── Floating Bottom Bar ─────────────────────────── */}
           <div style={{
-            position: 'fixed', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-            background: '#fff', borderRadius: '999px', boxShadow: '0 4px 24px rgba(0,0,0,0.15)',
+            position: 'fixed', bottom: isMobile ? '32px' : '24px', left: '50%', transform: 'translateX(-50%)',
+            background: darkMode ? 'rgba(31, 41, 55, 0.95)' : 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)',
+            borderRadius: '999px', boxShadow: darkMode ? '0 8px 32px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.15)',
             display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 16px',
-            zIndex: 500, border: '1px solid #e5e7eb',
+            zIndex: 500, border: `1px solid ${darkMode ? 'rgba(255,255,255,0.1)' : '#e5e7eb'}`,
           }}>
-            {/* Zoom Out */}
-            <button
-              onClick={() => setScale(s => Math.max(0.5, s - 0.25))}
-              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontSize: '20px', fontWeight: 300, lineHeight: 1 }}
+            <button onClick={() => setScale(s => Math.max(0.5, s - 0.25))}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#e5e7eb' : '#374151', fontSize: '20px', fontWeight: 300, lineHeight: 1 }}
             >−</button>
-            {/* Zoom % */}
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#374151', minWidth: '44px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: darkMode ? '#fff' : '#374151', minWidth: '44px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
               {Math.round(scale * 100)}%
             </span>
-            {/* Zoom In */}
-            <button
-              onClick={() => setScale(s => Math.min(3, s + 0.25))}
-              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', fontSize: '20px', fontWeight: 300, lineHeight: 1 }}
+            <button onClick={() => setScale(s => Math.min(3, s + 0.25))}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: darkMode ? '#e5e7eb' : '#374151', fontSize: '20px', fontWeight: 300, lineHeight: 1 }}
             >+</button>
 
-            <div style={{ width: '1px', height: '22px', background: '#e5e7eb', margin: '0 8px' }} />
+            <div style={{ width: '1px', height: '22px', background: darkMode ? 'rgba(255,255,255,0.1)' : '#e5e7eb', margin: '0 8px' }} />
 
-            {/* Prev Page */}
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: currentPage <= 1 ? '#d1d5db' : '#374151' }}
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: currentPage <= 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: currentPage <= 1 ? (darkMode ? '#4b5563' : '#d1d5db') : (darkMode ? '#e5e7eb' : '#374151') }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
-            {/* Page info */}
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', minWidth: '64px', textAlign: 'center' }}>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: darkMode ? '#fff' : '#374151', minWidth: '64px', textAlign: 'center' }}>
               {currentPage} / {numPages}
             </span>
-            {/* Next Page */}
-            <button
-              onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))}
-              disabled={currentPage >= numPages}
-              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: currentPage >= numPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: currentPage >= numPages ? '#d1d5db' : '#374151' }}
+            <button onClick={() => setCurrentPage(p => Math.min(numPages, p + 1))} disabled={currentPage >= numPages}
+              style={{ width: '30px', height: '30px', borderRadius: '50%', border: 'none', background: 'none', cursor: currentPage >= numPages ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: currentPage >= numPages ? (darkMode ? '#4b5563' : '#d1d5db') : (darkMode ? '#e5e7eb' : '#374151') }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>
         </div>
       </div>
+
+      <PropertyPanel
+        visible={showPropertyPanel && !!activeObjProps}
+        {...activeObjProps}
+        onFillChange={(v: string) => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.set('fill', v); fabricCanvas.renderAll(); saveState(fabricCanvas); updateActiveObjProps(fabricCanvas); }}}
+        onOpacityChange={(v: number) => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.set('opacity', v); fabricCanvas.renderAll(); saveState(fabricCanvas); updateActiveObjProps(fabricCanvas); }}}
+        onDelete={() => { if (fabricCanvas) { fabricCanvas.getActiveObjects().forEach(o => fabricCanvas.remove(o)); fabricCanvas.discardActiveObject(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onDuplicate={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.clone((cloned: any) => { cloned.set({ left: cloned.left + 20, top: cloned.top + 20, evented: true }); fabricCanvas.add(cloned); fabricCanvas.setActiveObject(cloned); fabricCanvas.renderAll(); saveState(fabricCanvas); }); }}}
+        onBringForward={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.bringForward(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onSendBackward={() => { if (fabricCanvas) { fabricCanvas.getActiveObject()?.sendBackwards(); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}
+        onFlipH={() => { if (fabricCanvas) { const obj = fabricCanvas.getActiveObject(); if (obj) { obj.set('flipX', !obj.flipX); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}}
+        onFlipV={() => { if (fabricCanvas) { const obj = fabricCanvas.getActiveObject(); if (obj) { obj.set('flipY', !obj.flipY); fabricCanvas.renderAll(); saveState(fabricCanvas); }}}}
+        darkMode={darkMode}
+        panelPosition={isMobile ? { top: 120, left: 16 } : undefined}
+      />
+
+      <SignaturePad
+        isOpen={showSignaturePad}
+        onClose={() => setShowSignaturePad(false)}
+        onInsert={(dataUrl) => {
+          if (!fabricCanvas) return;
+          fabric.Image.fromURL(dataUrl, (img) => {
+            img.scaleToWidth(200);
+            const view = pageRef.current?.getViewport({ scale });
+            img.set({ left: (view?.width || 400) / 2 - 100, top: (view?.height || 600) / 2 });
+            fabricCanvas.add(img);
+            fabricCanvas.setActiveObject(img);
+            fabricCanvas.renderAll();
+            saveState(fabricCanvas);
+          });
+        }}
+        darkMode={darkMode}
+      />
 
       {/* OCR Banner for scanned/handwritten pages */}
       {showOcrBanner && scannedPages.has(currentPage) && (
@@ -507,40 +655,39 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
         }}>
           <span style={{ fontSize: '22px' }}>📝</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: '13px', color: '#92400e' }}>Scanned / Handwritten Page Detected</div>
-            <div style={{ fontSize: '12px', color: '#a16207', marginTop: '2px' }}>No selectable text found. Run OCR to extract and edit text.</div>
+            <div style={{ fontWeight: 700, fontSize: '13px', color: '#92400e' }}>Scanned Page Detected</div>
+            <div style={{ fontSize: '12px', color: '#a16207', marginTop: '2px' }}>No selectable text found. Run OCR to extract.</div>
           </div>
           <button onClick={runOcrOnCurrentPage} disabled={ocrRunning}
-            style={{ padding: '7px 16px', background: '#f59e0b', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, fontSize: '12px', cursor: ocrRunning ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+            style={{ padding: '7px 16px', background: '#f59e0b', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, fontSize: '12px', cursor: ocrRunning ? 'wait' : 'pointer' }}>
             {ocrRunning ? `OCR ${ocrProgress}%` : '✨ Run OCR'}
           </button>
           <button onClick={() => setShowOcrBanner(false)}
-            style={{ background: 'none', border: 'none', color: '#a16207', cursor: 'pointer', fontSize: '16px', padding: '2px' }}>✕</button>
+            style={{ background: 'none', border: 'none', color: '#a16207', cursor: 'pointer', fontSize: '16px' }}>✕</button>
         </div>
       )}
 
       {showSearchModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', padding: '24px', borderRadius: '16px', border: '1px solid #e5e7eb', width: '384px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ color: '#111827', fontWeight: 700, marginBottom: '16px', fontSize: '16px' }}>Find &amp; Replace</h3>
+          <div style={{ background: darkMode ? '#1f2937' : '#fff', padding: '24px', borderRadius: '16px', border: `1px solid ${darkMode ? '#374151' : '#e5e7eb'}`, width: '384px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ color: darkMode ? '#fff' : '#111827', fontWeight: 700, marginBottom: '16px', fontSize: '16px' }}>Find &amp; Replace</h3>
             <input 
-              style={{ width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 14px', marginBottom: '10px', color: '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: darkMode ? '#374151' : '#f9fafb', border: `1px solid ${darkMode ? '#4b5563' : '#e5e7eb'}`, borderRadius: '8px', padding: '8px 14px', marginBottom: '10px', color: darkMode ? '#fff' : '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
               placeholder="Find text..." value={findText} onChange={e => setFindText(e.target.value)}
             />
             <input 
-              style={{ width: '100%', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 14px', marginBottom: '16px', color: '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
+              style={{ width: '100%', background: darkMode ? '#374151' : '#f9fafb', border: `1px solid ${darkMode ? '#4b5563' : '#e5e7eb'}`, borderRadius: '8px', padding: '8px 14px', marginBottom: '16px', color: darkMode ? '#fff' : '#111827', fontSize: '14px', boxSizing: 'border-box', outline: 'none' }}
               placeholder="Replace with..." value={replaceText} onChange={e => setReplaceText(e.target.value)}
             />
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginBottom: '14px' }}>
-              <button onClick={() => setShowSearchModal(false)} style={{ padding: '8px 16px', background: 'none', border: '1px solid #e5e7eb', borderRadius: '8px', color: '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
+              <button onClick={() => setShowSearchModal(false)} style={{ padding: '8px 16px', background: 'none', border: `1px solid ${darkMode ? '#4b5563' : '#e5e7eb'}`, borderRadius: '8px', color: darkMode ? '#9ca3af' : '#6b7280', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>Cancel</button>
               <button onClick={handleFindReplace} style={{ padding: '8px 18px', background: '#D2294B', border: 'none', borderRadius: '8px', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}>Replace All</button>
             </div>
-            <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '14px' }}>
+            <div style={{ borderTop: `1px solid ${darkMode ? '#374151' : '#f3f4f6'}`, paddingTop: '14px' }}>
               <button onClick={runOcrOnCurrentPage} disabled={ocrRunning}
-                style={{ width: '100%', padding: '9px', background: ocrRunning ? '#f9fafb' : '#FFF0F2', border: '1.5px solid #D2294B', borderRadius: '8px', color: '#D2294B', cursor: ocrRunning ? 'wait' : 'pointer', fontWeight: 700, fontSize: '13px' }}>
+                style={{ width: '100%', padding: '9px', background: ocrRunning ? 'transparent' : 'rgba(210,41,75,0.1)', border: '1.5px solid #D2294B', borderRadius: '8px', color: '#D2294B', cursor: ocrRunning ? 'wait' : 'pointer', fontWeight: 700, fontSize: '13px' }}>
                 {ocrRunning ? `Extracting Text... ${ocrProgress}%` : '✨ Magic OCR — Extract All Text'}
               </button>
-              <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '6px', textAlign: 'center' }}>Works on scanned PDFs, handwritten pages, and image-based documents.</p>
             </div>
           </div>
         </div>
@@ -549,8 +696,8 @@ export default function PDFEditor({ file, onSave, onClose }: PDFEditorProps) {
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? '#4b5563' : '#d1d5db'}; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${darkMode ? '#6b7280' : '#9ca3af'}; }
       `}</style>
     </motion.div>
   );
