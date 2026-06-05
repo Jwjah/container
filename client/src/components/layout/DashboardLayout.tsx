@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PulseDot, NotificationBadge } from '@/components/animations';
+import Logo from '@/components/ui/Logo';
 import api from '@/lib/api';
 import {
   HiOutlineHome, HiOutlineDocumentText, HiOutlineCog, HiOutlineLogout,
@@ -151,13 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <Link href={`/${user.role}`} style={{ textDecoration: 'none' }}>
-            <span style={{
-              fontSize: 20, fontWeight: 800,
-              background: 'linear-gradient(135deg, #6366f1, #a78bfa)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            }}>
-              CampusPrint
-            </span>
+            <Logo size={32} />
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="btn btn-ghost btn-icon mobile-only"
             style={{ padding: 4 }}>

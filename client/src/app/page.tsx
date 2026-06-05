@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/store';
 import { useRouter } from 'next/navigation';
 import { HiOutlinePrinter, HiOutlineLightningBolt, HiOutlineShieldCheck, HiOutlineTruck } from 'react-icons/hi';
+import Logo from '@/components/ui/Logo';
 
 const features = [
   { icon: <HiOutlinePrinter size={28} />, title: 'Smart Printing', desc: 'Upload PDFs, choose B&W or color, single or double-sided. Auto page detection.' },
@@ -45,16 +46,7 @@ export default function LandingPage() {
         }}
       >
         <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            style={{
-              fontSize: 22, fontWeight: 800,
-              background: 'linear-gradient(135deg, #6366f1, #a78bfa, #ec4899)',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            }}
-          >
-            CampusPrint
-          </motion.div>
+          <Logo size={40} />
           <div style={{ display: 'flex', gap: 12 }}>
             <Link href="/login">
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-ghost">
