@@ -101,20 +101,22 @@ exports.verifyOTP = async (req, res) => {
 
 // POST /api/auth/login
 exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const adminEmail = process.env.ADMIN_EMAIL || 'abhir2756@gmail.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin';
+    email = email.trim().toLowerCase();
+    password = password.trim();
 
-    let [users] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+    const adminEmail = (process.env.ADMIN_EMAIL || 'abhir2756@gmail.com').trim().toLowerCase();
+    const adminPassword = (process.env.ADMIN_PASSWORD || 'admin').trim();
+
+    let [users] = await db.execute('SELECT * FROM users WHERE TRIM(LOWER(email)) = ?', [email]);
 
     // Auto-seed the admin user if they don't exist yet in the database
-    if (!users.length && email.toLowerCase() === adminEmail.toLowerCase()) {
+    if (!users.length && email === adminEmail) {
       if (password === adminPassword) {
         const hash = await bcrypt.hash(password, 12);
         const [insertResult] = await db.execute(
@@ -144,7 +146,7 @@ exports.login = async (req, res) => {
     }
 
     // Auto-promote and verify user if their email matches the admin email
-    if (user.email.toLowerCase() === adminEmail.toLowerCase()) {
+    if (user.email.trim().toLowerCase() === adminEmail) {
       if (user.role !== 'admin' || !user.is_verified) {
         await db.execute(
           'UPDATE users SET role = ?, is_verified = 1 WHERE id = ?',
