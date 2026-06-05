@@ -26,9 +26,16 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (!otpMode) {
-        await api.post('/auth/login', { email, password });
-        setOtpMode(true);
-        toast.success('OTP sent to your email!');
+        const { data } = await api.post('/auth/login', { email, password });
+        if (data.requiresOTP) {
+          setOtpMode(true);
+          toast.success('OTP sent to your email!');
+        } else {
+          setAuth(data.user, data.token);
+          toast.success('🎉 Welcome back!');
+          const routes: Record<string, string> = { student: '/student', shop: '/shop', agent: '/agent', admin: '/admin' };
+          router.push(routes[data.user.role] || '/student');
+        }
       } else {
         const { data } = await api.post('/auth/verify-otp', { email, code: otp });
         setAuth(data.user, data.token);

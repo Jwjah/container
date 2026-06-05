@@ -207,25 +207,6 @@ export default function InstallPrompt() {
           >
             {deferredPrompt ? 'Install' : 'Get App'}
           </button>
-          
-          <button
-            onClick={handleDismiss}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#64748b',
-              fontSize: '18px',
-              cursor: 'pointer',
-              padding: '4px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            aria-label="Dismiss install prompt"
-          >
-            ✕
-          </button>
         </div>
       </div>
 
