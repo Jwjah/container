@@ -9,7 +9,7 @@ import { TapButton, StaggerContainer, StaggerItem, HoverCard, PageTransition } f
 import { HiOutlineCloudUpload, HiOutlineX, HiOutlineDocument, HiOutlinePhotograph, HiOutlinePencilAlt } from 'react-icons/hi';
 import dynamic from 'next/dynamic';
 
-const PDFEditor = dynamic(() => import('@/components/PDFEditor'), { ssr: false });
+const StirlingEditor = dynamic(() => import('@/components/StirlingEditor'), { ssr: false });
 const ImageEditor = dynamic(() => import('@/components/ImageEditor'), { ssr: false });
 
 export default function NewOrderPage() {
@@ -246,7 +246,7 @@ export default function NewOrderPage() {
         {editingFileIndex !== null && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 10000 }}>
             {files[editingFileIndex].type.includes('pdf') ? (
-              <PDFEditor
+              <StirlingEditor
                 file={files[editingFileIndex]}
                 onClose={() => setEditingFileIndex(null)}
                 onSave={(newFile) => {
