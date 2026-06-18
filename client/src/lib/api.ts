@@ -2,7 +2,13 @@ import axios from 'axios';
 
 // Auto-detect API URL for Vercel previews
 const getApiBase = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    let url = process.env.NEXT_PUBLIC_API_URL;
+    if (!url.endsWith('/api')) {
+      url = url.replace(/\/$/, '') + '/api';
+    }
+    return url;
+  }
   if (typeof window !== 'undefined') {
     // If on Vercel preview, the API is usually on the same host but at /api
     return `${window.location.origin}/api`;
