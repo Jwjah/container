@@ -103,7 +103,17 @@ exports.createOrder = async (req, res) => {
       hash: orderHash,
       action: 'verify_pickup',
     });
-    await db.execute('UPDATE orders SET pickup_qr = ? WHERE id = ?', [pickupQR, orderId]);
+
+    let deliveryQR = null;
+    if (delivery_type === 'hostel') {
+      deliveryQR = await generateQRCode({
+        type: 'delivery',
+        orderId,
+        hash: orderHash,
+        action: 'verify_delivery',
+      });
+    }
+    await db.execute('UPDATE orders SET pickup_qr = ?, delivery_qr = ? WHERE id = ?', [pickupQR, deliveryQR, orderId]);
 
     // Create notification for shop
     await db.execute(
@@ -418,12 +428,185 @@ exports.downloadFile = async (req, res) => {
     if (!hasPermission) {
       return res.status(403).json({ error: 'Unauthorized to access this file' });
     }
-
     // Return full URL to ensure browser can find the file across domains
     const baseUrl = (process.env.API_URL || '').replace('/api', '');
     res.json({ url: `${baseUrl}${file.file_path}` });
   } catch (err) {
     console.error('Download file error:', err);
     res.status(500).json({ error: 'Failed to download file' });
+  }
+};
+
+// PATCH /api/orders/:id/change-fulfillment — Change delivery method (student)
+exports.changeFulfillment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { delivery_type, hostel_address } = req.body;
+    
+    if (!['pickup', 'hostel'].includes(delivery_type)) {
+      return res.status(400).json({ error: 'Invalid delivery type' });
+    }
+
+    // Fetch order details
+    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [id]);
+    if (!orders.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    // Authorization check: Only the customer who placed the order can change it
+    if (order.student_id !== req.user.id) {
+      return res.status(403).json({ error: 'You are not authorized to change this order' });
+    }
+
+    // Status validation: Disable once marked as Out for Delivery, Delivered/Picked Up, or Cancelled
+    const allowedStatuses = ['pending', 'confirmed', 'printing', 'ready'];
+    if (!allowedStatuses.includes(order.status)) {
+      return res.status(400).json({ 
+        error: `Cannot change delivery method. Order is already ${order.status.replace(/_/g, ' ')}.` 
+      });
+    }
+
+    if (order.delivery_type === delivery_type) {
+      return res.status(400).json({ error: `Order is already set to ${delivery_type === 'hostel' ? 'Delivery' : 'Pickup'}` });
+    }
+
+    let updatedFee = 0.00;
+    let updatedPrice = order.total_price;
+    let deliveryQR = order.delivery_qr;
+
+    if (delivery_type === 'hostel') {
+      if (!hostel_address || hostel_address.trim() === '') {
+        return res.status(400).json({ error: 'Delivery address is required for hostel delivery' });
+      }
+      updatedFee = 15.00;
+      updatedPrice = parseFloat((parseFloat(order.total_price) + 15.00).toFixed(2));
+      
+      // Generate delivery QR if not already present
+      if (!deliveryQR) {
+        deliveryQR = await generateQRCode({
+          type: 'delivery',
+          orderId: order.id,
+          hash: order.order_hash,
+          action: 'verify_delivery',
+        });
+      }
+
+      await db.execute(
+        'UPDATE orders SET delivery_type = ?, hostel_address = ?, delivery_fee = ?, total_price = ?, delivery_qr = ? WHERE id = ?',
+        [delivery_type, hostel_address, updatedFee, updatedPrice, deliveryQR, id]
+      );
+    } else {
+      // Switching to Pickup
+      updatedFee = 0.00;
+      updatedPrice = parseFloat((parseFloat(order.total_price) - 15.00).toFixed(2));
+      deliveryQR = null;
+
+      // Reset agent_id and cancel/delete active deliveries
+      await db.execute(
+        'UPDATE orders SET delivery_type = ?, hostel_address = NULL, delivery_fee = ?, total_price = ?, delivery_qr = NULL, agent_id = NULL WHERE id = ?',
+        [delivery_type, updatedFee, updatedPrice, id]
+      );
+
+      // Remove from deliveries table
+      await db.execute('DELETE FROM deliveries WHERE order_id = ?', [id]);
+    }
+
+    // Create notifications
+    // Notify customer
+    const typeLabel = delivery_type === 'hostel' ? 'Hostel Delivery' : 'Self Pickup';
+    await db.execute(
+      'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+      [order.student_id, 'Delivery Method Changed', `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${updatedPrice.toFixed(0)}`, 'order']
+    );
+
+    // Notify shop
+    const [shops] = await db.execute('SELECT user_id FROM shops WHERE id = ?', [order.shop_id]);
+    if (shops.length) {
+      const shopUserId = shops[0].user_id;
+      const shortHash = order.order_hash.substring(0, 8).toUpperCase();
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [shopUserId, '🔄 Order Update', `Order #${shortHash} changed to ${typeLabel}`, 'order']
+      );
+      await sendPushToUser(shopUserId, {
+        title: '🔄 Order Update',
+        message: `Order #${shortHash} changed to ${typeLabel}`,
+        url: '/shop/queue',
+        tag: `order-${id}`,
+      });
+    }
+
+    res.json({ 
+      message: 'Delivery method updated successfully', 
+      delivery_type, 
+      total_price: updatedPrice, 
+      delivery_fee: updatedFee 
+    });
+  } catch (err) {
+    console.error('Change fulfillment error:', err);
+    res.status(500).json({ error: 'Failed to update delivery method' });
+  }
+};
+
+// GET /api/orders/files/:fileId/print-pdf — Local print agent downloads modified PDF
+exports.downloadPrintPdf = async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    // Fetch file details along with order details
+    const [files] = await db.execute(
+      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr 
+       FROM order_files f 
+       JOIN orders o ON f.order_id = o.id 
+       WHERE f.id = ?`,
+      [fileId]
+    );
+
+    if (!files.length) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const file = files[0];
+    
+    // Download original PDF from Cloudinary URL
+    const axios = require('axios');
+    let pdfBuffer;
+    try {
+      const response = await axios.get(file.file_path, { responseType: 'arraybuffer' });
+      pdfBuffer = Buffer.from(response.data);
+    } catch (fetchErr) {
+      console.error('Failed to download file from Cloudinary:', fetchErr.message);
+      return res.status(500).json({ error: 'Failed to fetch original file from cloud storage' });
+    }
+    
+    // If not a PDF, send directly
+    if (file.mime_type !== 'application/pdf') {
+      res.contentType(file.mime_type);
+      return res.send(pdfBuffer);
+    }
+    
+    // Modify PDF using helper
+    const { modifyPdf } = require('../utils/pdfProcessor');
+    let modifiedBuffer;
+    try {
+      modifiedBuffer = await modifyPdf(
+        pdfBuffer,
+        file.order_hash,
+        file.id,
+        file.pickup_qr,
+        file.delivery_qr
+      );
+    } catch (processErr) {
+      console.error('PDF modifications failed, sending original:', processErr.message);
+      modifiedBuffer = pdfBuffer; // fallback to original on failure
+    }
+    
+    res.contentType('application/pdf');
+    res.send(modifiedBuffer);
+  } catch (err) {
+    console.error('Download print PDF error:', err);
+    res.status(500).json({ error: 'Failed to prepare PDF for printing' });
   }
 };

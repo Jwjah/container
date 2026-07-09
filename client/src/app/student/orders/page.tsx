@@ -232,6 +232,66 @@ export default function OrdersPage() {
               </div>
             )}
 
+            {/* Change Delivery Method Section */}
+            {['pending', 'confirmed', 'printing', 'ready'].includes(selected.status) && (
+              <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Change Delivery Method</h3>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button 
+                    className={`btn ${selected.delivery_type === 'pickup' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={async () => {
+                      if (selected.delivery_type === 'pickup') return;
+                      if (confirm('Switch to Self Pickup? Your delivery charge of ₹15 will be removed.')) {
+                        try {
+                          const { data } = await api.patch(`/orders/${selected.id}/change-fulfillment`, {
+                            delivery_type: 'pickup'
+                          });
+                          toast.success('Switched to Self Pickup!');
+                          setSelected({ ...selected, delivery_type: 'pickup', total_price: data.total_price });
+                          loadOrders(true);
+                        } catch (err: any) {
+                          toast.error(err.response?.data?.error || 'Failed to update delivery method');
+                        }
+                      }
+                    }}
+                  >
+                    🏪 Self Pickup
+                  </button>
+                  <button 
+                    className={`btn ${selected.delivery_type === 'hostel' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, fontSize: 13 }}
+                    onClick={async () => {
+                      if (selected.delivery_type === 'hostel') return;
+                      const address = prompt('Please enter your hostel address (e.g. Hostel A, Room 101):');
+                      if (address && address.trim() !== '') {
+                        try {
+                          const { data } = await api.patch(`/orders/${selected.id}/change-fulfillment`, {
+                            delivery_type: 'hostel',
+                            hostel_address: address
+                          });
+                          toast.success('Switched to Hostel Delivery! Additional ₹15 added.');
+                          setSelected({ ...selected, delivery_type: 'hostel', hostel_address: address, total_price: data.total_price });
+                          loadOrders(true);
+                        } catch (err: any) {
+                          toast.error(err.response?.data?.error || 'Failed to update delivery method');
+                        }
+                      } else if (address !== null) {
+                        toast.error('Hostel address is required for delivery.');
+                      }
+                    }}
+                  >
+                    🚀 Hostel Delivery (+₹15)
+                  </button>
+                </div>
+                {selected.delivery_type === 'hostel' && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.05)' }}>
+                    📍 <strong>Address:</strong> {selected.hostel_address}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button className="btn btn-secondary" style={{ width: '100%', marginTop: 24 }} onClick={() => setSelected(null)}>Close</button>
           </div>
         )}

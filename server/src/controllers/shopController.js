@@ -174,13 +174,16 @@ exports.triggerPrint = async (req, res) => {
       printQueue[shopId] = [];
     }
 
+    const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token || '';
+    const baseUrl = (process.env.API_URL || 'http://localhost:5050/api');
+
     // Add each file to the queue
     for (const file of files) {
       printQueue[shopId].push({
         orderId,
         fileId: file.id,
         fileName: file.original_name,
-        fileUrl: file.file_path, // Cloudinary URL
+        fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf?token=${token}`,
       });
     }
 
