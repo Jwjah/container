@@ -11,65 +11,61 @@ const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm = 28.35 pt
 const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm = 22.68 pt
 const SEPARATOR_THICKNESS = 0.5;           // 0.5 pt
 
-/**
- * Modifies the last page of the PDF to compress it vertically and add a branded footer.
- * 
- * @param {Buffer} pdfBuffer - Original PDF buffer
- * @param {string} orderHash - The order hash (used for short order ID)
- * @param {string} orderId - The order ID
- * @param {string} pickupQrBase64 - Base64 data URL for pickup QR code
- * @param {string} deliveryQrBase64 - Base64 data URL for delivery QR code (optional)
- * @returns {Promise<Buffer>} - Modified PDF buffer
- */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64) {
-  try {
-    const pdfDoc = await PDFDocument.load(pdfBuffer);
-    const pages = pdfDoc.getPages();
+class FooterRenderer {
+  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, metadata = {}) {
+    this.page = page;
+    this.pdfDoc = pdfDoc;
+    this.orderHash = orderHash;
+    this.orderId = orderId;
+    this.pickupQr = pickupQr;
+    this.deliveryQr = deliveryQr;
+    this.metadata = metadata;
     
-    if (pages.length === 0) {
-      throw new Error('PDF has no pages');
-    }
+    const { width, height } = page.getSize();
+    this.width = width;
+    this.height = height;
     
-    const lastPage = pages[pages.length - 1];
-    const { width, height } = lastPage.getSize();
-    
-    // Calculate the vertical scale factor to fit the 15mm footer
-    const scaleY = (height - FOOTER_HEIGHT) / height;
-    
-    // Scale existing content first (relative to origin), then translate it up above the footer.
-    // This maps the content from [0, height] to [FOOTER_HEIGHT, height] perfectly without any gaps.
-    lastPage.scaleContent(1, scaleY);
-    lastPage.translateContent(0, FOOTER_HEIGHT);
-    
-    // Draw minimalist clean footer background
-    lastPage.drawRectangle({
+    this.font = null;
+    this.boldFont = null;
+  }
+
+  async loadFonts() {
+    this.font = await this.pdfDoc.embedFont(StandardFonts.Helvetica);
+    this.boldFont = await this.pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  }
+
+  drawBackground() {
+    // Draw minimalist clean white footer background
+    this.page.drawRectangle({
       x: 0,
       y: 0,
-      width: width,
+      width: this.width,
       height: FOOTER_HEIGHT,
       color: rgb(1, 1, 1),
     });
-    
+  }
+
+  drawSeparator() {
     // Draw thin separator line (0.5 pt)
-    lastPage.drawLine({
+    this.page.drawLine({
       start: { x: SIDE_PADDING, y: FOOTER_HEIGHT },
-      end: { x: width - SIDE_PADDING, y: FOOTER_HEIGHT },
+      end: { x: this.width - SIDE_PADDING, y: FOOTER_HEIGHT },
       thickness: SEPARATOR_THICKNESS,
       color: rgb(0.85, 0.85, 0.85),
     });
-    
-    // --- COLUMN 1: LEFT (20% of width) -> Logo only ---
+  }
+
+  async drawLeftColumn() {
     const logoX = SIDE_PADDING;
     const logoY = (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
     
+    // 1. Draw Logo
     try {
       const logoPath = path.join(__dirname, '../assets/logo.jpg');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
-        const logoImage = await pdfDoc.embedJpg(logoBytes);
-        
-        // Render logo centered vertically
-        lastPage.drawImage(logoImage, {
+        const logoImage = await this.pdfDoc.embedJpg(logoBytes);
+        this.page.drawImage(logoImage, {
           x: logoX,
           y: logoY,
           width: LOGO_HEIGHT,
@@ -79,157 +75,315 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
     } catch (logoErr) {
       console.error('Failed to embed logo in PDF:', logoErr.message);
     }
-    
-    // --- COLUMN 2: CENTER (50% of width) -> Branded text stack ---
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    
-    const textCenter = width * 0.45; // Center of the middle 50% column
+
+    // 2. Draw Identity Text Stack (Right of Logo)
+    const textX = logoX + LOGO_HEIGHT + 4 * MM_TO_PT;
     
     const line1 = 'CampusPrint';
     const line2 = 'Printing made effortless.';
     const line3 = 'campusprint.in';
     
-    const size1 = 7.5;
-    const size2 = 6.0;
-    const size3 = 5.0;
+    const size1 = 6.5;
+    const size2 = 5.0;
+    const size3 = 4.5;
     
-    const w1 = boldFont.widthOfTextAtSize(line1, size1);
-    const w2 = font.widthOfTextAtSize(line2, size2);
-    const w3 = font.widthOfTextAtSize(line3, size3);
+    // Vertical placement centered in FOOTER_HEIGHT (total text height = 20pt)
+    const textBlockHeight = size1 + size2 + size3 + 4.0;
+    const startY = (FOOTER_HEIGHT - textBlockHeight) / 2;
     
-    // Alignments
-    const x1 = textCenter - w1 / 2;
-    const x2 = textCenter - w2 / 2;
-    const x3 = textCenter - w3 / 2;
-    
-    // Vertical placement for equal optical spacing within the 15mm (42.52 pt) height
-    const y3 = 5.0;
-    const y2 = y3 + size3 + 3.0; // 13.0 pt
-    const y1 = y2 + size2 + 3.0; // 22.0 pt
-    
-    lastPage.drawText(line1, {
-      x: x1,
+    const y3 = startY;
+    const y2 = y3 + size3 + 2.0;
+    const y1 = y2 + size2 + 2.0;
+
+    this.page.drawText(line1, {
+      x: textX,
       y: y1,
       size: size1,
-      font: boldFont,
+      font: this.boldFont,
       color: rgb(0.05, 0.05, 0.1),
     });
     
-    lastPage.drawText(line2, {
-      x: x2,
+    this.page.drawText(line2, {
+      x: textX,
       y: y2,
       size: size2,
-      font: font,
+      font: this.font,
       color: rgb(0.2, 0.2, 0.25),
     });
     
-    lastPage.drawText(line3, {
-      x: x3,
+    this.page.drawText(line3, {
+      x: textX,
       y: y3,
       size: size3,
-      font: font,
-      color: rgb(0.5, 0.5, 0.55),
+      font: this.font,
+      color: rgb(0.55, 0.55, 0.6),
     });
+  }
+
+  drawCenterRightColumn() {
+    // Column range: [50% of width, 70% of width]
+    const colMinX = this.width * 0.50;
+    const colMaxX = this.width * 0.70;
+    const colCenterX = (colMinX + colMaxX) / 2;
     
-    // --- COLUMN 3: RIGHT (30% of width) -> Dynamic QR Codes ---
-    const rightAreaMinX = width * 0.70;
-    const rightAreaMaxX = width - SIDE_PADDING;
+    // Format metadata values
+    const shortId = this.orderHash ? this.orderHash.substring(0, 8).toUpperCase() : 'N/A';
+    
+    let formattedDate = 'N/A';
+    if (this.metadata.created_at) {
+      try {
+        formattedDate = new Date(this.metadata.created_at).toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+      } catch (e) {
+        formattedDate = String(this.metadata.created_at).substring(0, 10);
+      }
+    } else {
+      formattedDate = new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+
+    const pages = this.metadata.page_count || 1;
+    const printType = this.metadata.print_type === 'color' ? 'Color' : 'B&W';
+    const copies = this.metadata.copies || 1;
+    const paperSize = this.metadata.paper || 'A4';
+    const duplex = this.metadata.layout === 'double' ? 'Yes' : 'No';
+
+    const size = 4.5;
+    const spacingY = 6.5;
+    
+    // Left Grid Column coordinates
+    const x1 = colMinX + 2 * MM_TO_PT;
+    // Right Grid Column coordinates
+    const x2 = colCenterX + 2 * MM_TO_PT;
+
+    // Baselines matched to other columns
+    const y3 = 5.0;
+    const y2 = y3 + size + spacingY;
+    const y1 = y2 + size + spacingY;
+
+    // Col 1
+    this.page.drawText(`Order: CP${shortId}`, { x: x1, y: y1, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+    this.page.drawText(`Date: ${formattedDate}`, { x: x1, y: y2, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+    this.page.drawText(`Pages: ${pages}`, { x: x1, y: y3, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+
+    // Col 2
+    this.page.drawText(`Print: ${printType}`, { x: x2, y: y1, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+    this.page.drawText(`Paper: ${paperSize} (${copies} cop)`, { x: x2, y: y2, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+    this.page.drawText(`Duplex: ${duplex}`, { x: x2, y: y3, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
+  }
+
+  async drawRightColumn() {
+    // Dynamic QR Column range: [70% of width, width - SIDE_PADDING]
+    const rightAreaMinX = this.width * 0.70;
+    const rightAreaMaxX = this.width - SIDE_PADDING;
     const rightAreaWidth = rightAreaMaxX - rightAreaMinX;
     
     const qrsToEmbed = [];
-    if (pickupQrBase64) {
+    const shortId = this.orderHash ? this.orderHash.substring(0, 8).toUpperCase() : 'N/A';
+
+    if (this.pickupQr) {
       qrsToEmbed.push({
-        base64: pickupQrBase64,
-        label: deliveryQrBase64 ? 'Pickup' : `Order #${orderHash.substring(0, 8).toUpperCase()}`,
+        base64: this.pickupQr,
+        label1: this.deliveryQr ? 'Pickup' : 'Order',
+        label2: `CP${shortId}`,
       });
     }
-    if (deliveryQrBase64) {
+    if (this.deliveryQr) {
       qrsToEmbed.push({
-        base64: deliveryQrBase64,
-        label: 'Delivery',
+        base64: this.deliveryQr,
+        label1: 'Delivery',
+        label2: 'Track',
       });
     }
     
-    // Y coordinates for QR code and caption underneath
-    const qrY = 9.0;
-    const captionY = 2.5;
-    const captionSize = 4.5;
+    // Layout parameters
+    const qrY = 11.5;
+    const cap1Y = 6.0;
+    const cap2Y = 1.5;
+    const captionSize = 4.0;
     
     if (qrsToEmbed.length === 1) {
-      // Single QR centered in the Right Column area
+      // Single QR layout
       const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
       const qrX = rightCenterX - QR_SIZE / 2;
       
       const qrBytes = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      const qrImage = await pdfDoc.embedPng(qrBytes);
+      const qrImage = await this.pdfDoc.embedPng(qrBytes);
       
-      lastPage.drawImage(qrImage, {
+      this.page.drawImage(qrImage, {
         x: qrX,
         y: qrY,
         width: QR_SIZE,
         height: QR_SIZE,
       });
       
-      const labelWidth = font.widthOfTextAtSize(qrsToEmbed[0].label, captionSize);
-      const labelX = qrX + (QR_SIZE - labelWidth) / 2;
-      lastPage.drawText(qrsToEmbed[0].label, {
-        x: labelX,
-        y: captionY,
+      // Caption Line 1
+      const w1 = this.font.widthOfTextAtSize(qrsToEmbed[0].label1, captionSize);
+      this.page.drawText(qrsToEmbed[0].label1, {
+        x: qrX + (QR_SIZE - w1) / 2,
+        y: cap1Y,
         size: captionSize,
-        font: font,
+        font: this.font,
+        color: rgb(0.4, 0.4, 0.45),
+      });
+      
+      // Caption Line 2
+      const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
+      this.page.drawText(qrsToEmbed[0].label2, {
+        x: qrX + (QR_SIZE - w2) / 2,
+        y: cap2Y,
+        size: captionSize,
+        font: this.font,
         color: rgb(0.4, 0.4, 0.45),
       });
       
     } else if (qrsToEmbed.length === 2) {
-      // Double QRs spaced equally inside the Right Column area
+      // Double QR Layout
       const gap = (rightAreaWidth - 2 * QR_SIZE) / 3;
-      
       const qrX1 = rightAreaMinX + gap;
       const qrX2 = qrX1 + QR_SIZE + gap;
       
-      // QR 1 (Order/Pickup)
+      // QR 1
       const qrBytes1 = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      const qrImage1 = await pdfDoc.embedPng(qrBytes1);
-      lastPage.drawImage(qrImage1, {
+      const qrImage1 = await this.pdfDoc.embedPng(qrBytes1);
+      this.page.drawImage(qrImage1, {
         x: qrX1,
         y: qrY,
         width: QR_SIZE,
         height: QR_SIZE,
       });
       
-      // Order QR gets Order ID printed under it
-      const orderLabel = `Order #${orderHash.substring(0, 8).toUpperCase()}`;
-      const labelWidth1 = font.widthOfTextAtSize(orderLabel, captionSize);
-      const labelX1 = qrX1 + (QR_SIZE - labelWidth1) / 2;
-      lastPage.drawText(orderLabel, {
-        x: labelX1,
-        y: captionY,
+      const w1 = this.font.widthOfTextAtSize(qrsToEmbed[0].label1, captionSize);
+      this.page.drawText(qrsToEmbed[0].label1, {
+        x: qrX1 + (QR_SIZE - w1) / 2,
+        y: cap1Y,
         size: captionSize,
-        font: font,
+        font: this.font,
         color: rgb(0.4, 0.4, 0.45),
       });
       
-      // QR 2 (Delivery)
+      const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
+      this.page.drawText(qrsToEmbed[0].label2, {
+        x: qrX1 + (QR_SIZE - w2) / 2,
+        y: cap2Y,
+        size: captionSize,
+        font: this.font,
+        color: rgb(0.4, 0.4, 0.45),
+      });
+
+      // QR 2
       const qrBytes2 = Buffer.from(qrsToEmbed[1].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      const qrImage2 = await pdfDoc.embedPng(qrBytes2);
-      lastPage.drawImage(qrImage2, {
+      const qrImage2 = await this.pdfDoc.embedPng(qrBytes2);
+      this.page.drawImage(qrImage2, {
         x: qrX2,
         y: qrY,
         width: QR_SIZE,
         height: QR_SIZE,
       });
       
-      const labelWidth2 = font.widthOfTextAtSize(qrsToEmbed[1].label, captionSize);
-      const labelX2 = qrX2 + (QR_SIZE - labelWidth2) / 2;
-      lastPage.drawText(qrsToEmbed[1].label, {
-        x: labelX2,
-        y: captionY,
+      const w3 = this.font.widthOfTextAtSize(qrsToEmbed[1].label1, captionSize);
+      this.page.drawText(qrsToEmbed[1].label1, {
+        x: qrX2 + (QR_SIZE - w3) / 2,
+        y: cap1Y,
         size: captionSize,
-        font: font,
+        font: this.font,
+        color: rgb(0.4, 0.4, 0.45),
+      });
+      
+      const w4 = this.font.widthOfTextAtSize(qrsToEmbed[1].label2, captionSize);
+      this.page.drawText(qrsToEmbed[1].label2, {
+        x: qrX2 + (QR_SIZE - w4) / 2,
+        y: cap2Y,
+        size: captionSize,
+        font: this.font,
         color: rgb(0.4, 0.4, 0.45),
       });
     }
+  }
+
+  drawVersioning() {
+    const versionText = 'CampusPrint • 2026';
+    const vSize = 5.0;
+    const vWidth = this.font.widthOfTextAtSize(versionText, vSize);
+    
+    // Position at the extreme bottom right, offset by SIDE_PADDING
+    const vx = this.width - SIDE_PADDING - vWidth;
+    const vy = 1.5;
+
+    // Draw almost-invisible version string
+    this.page.drawText(versionText, {
+      x: vx,
+      y: vy,
+      size: vSize,
+      font: this.font,
+      color: rgb(0.7, 0.7, 0.75),
+    });
+  }
+
+  async render() {
+    this.drawBackground();
+    this.drawSeparator();
+    await this.drawLeftColumn();
+    this.drawCenterRightColumn();
+    await this.drawRightColumn();
+    this.drawVersioning();
+  }
+}
+
+/**
+ * Modifies the last page of the PDF to compress it vertically and add a branded footer.
+ * 
+ * @param {Buffer} pdfBuffer - Original PDF buffer
+ * @param {string} orderHash - The order hash (used for short order ID)
+ * @param {string} orderId - The order ID
+ * @param {string} pickupQrBase64 - Base64 data URL for pickup QR code
+ * @param {string} deliveryQrBase64 - Base64 data URL for delivery QR code (optional)
+ * @param {Object} metadata - Printing metadata options (optional)
+ * @returns {Promise<Buffer>} - Modified PDF buffer
+ */
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, metadata = {}) {
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const pages = pdfDoc.getPages();
+    
+    if (pages.length === 0) {
+      throw new Error('PDF has no pages');
+    }
+    
+    const lastPage = pages[pages.length - 1];
+    const { height } = lastPage.getSize();
+    
+    // Inject page count into metadata
+    const enrichedMetadata = {
+      ...metadata,
+      page_count: pages.length,
+    };
+    
+    // Calculate the vertical scale factor to fit the 15mm footer
+    const scaleY = (height - FOOTER_HEIGHT) / height;
+    
+    // Compress and translate content to naturally end immediately above the footer strip
+    lastPage.scaleContent(1, scaleY);
+    lastPage.translateContent(0, FOOTER_HEIGHT);
+    
+    // Render the premium document signature strip
+    const renderer = new FooterRenderer(
+      lastPage,
+      pdfDoc,
+      orderHash,
+      orderId,
+      pickupQrBase64,
+      deliveryQrBase64,
+      enrichedMetadata
+    );
+    await renderer.loadFonts();
+    await renderer.render();
     
     const modifiedBytes = await pdfDoc.save();
     return Buffer.from(modifiedBytes);
@@ -239,4 +393,4 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
   }
 }
 
-module.exports = { modifyPdf };
+module.exports = { modifyPdf, FooterRenderer };
