@@ -46,11 +46,19 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
       const { data } = await api.get('/auth/me');
+      localStorage.setItem('user', JSON.stringify(data.user));
       set({ user: data.user, loading: false });
-    } catch {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      set({ user: null, token: null, loading: false });
+    } catch (err: any) {
+      console.warn('Failed to validate session:', err);
+      // Only clear credentials if the API responds with an explicit 401 or 403 authorization error.
+      // Other network or server-side issues (downtime, cold boot) should keep the local session active.
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        set({ user: null, token: null, loading: false });
+      } else {
+        set({ loading: false });
+      }
     }
   },
 }));

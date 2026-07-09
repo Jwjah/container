@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -22,8 +22,15 @@ export default function RegisterPage() {
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', role: 'student', hostel: '', room_number: '' });
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const { setAuth } = useAuthStore();
+  const { setAuth, user } = useAuthStore();
   const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      const routes: Record<string, string> = { student: '/student', shop: '/shop', agent: '/agent', admin: '/admin' };
+      router.replace(routes[user.role] || '/student');
+    }
+  }, [user, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
