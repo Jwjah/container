@@ -2,6 +2,15 @@ const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 
+// Reusable physical layout constants (converted to PDF points: 1 mm = 2.83465 pt)
+const MM_TO_PT = 2.83465;
+
+const FOOTER_HEIGHT = 15 * MM_TO_PT;       // 15 mm = 42.52 pt
+const QR_SIZE = 12 * MM_TO_PT;             // 12 mm = 34.02 pt
+const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm = 28.35 pt
+const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm = 22.68 pt
+const SEPARATOR_THICKNESS = 0.5;           // 0.5 pt
+
 /**
  * Modifies the last page of the PDF to compress it vertically and add a branded footer.
  * 
@@ -24,161 +33,201 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
     const lastPage = pages[pages.length - 1];
     const { width, height } = lastPage.getSize();
     
-    // 1.5 cm footer in PDF points: (1.5 / 2.54) * 72 = 42.52
-    const footerHeight = 42.52;
-    const scaleY = (height - footerHeight) / height;
+    // Calculate the vertical scale factor to fit the 15mm footer
+    const scaleY = (height - FOOTER_HEIGHT) / height;
     
-    // 1. Vertical compression of existing content
-    lastPage.translateContent(0, footerHeight);
+    // Scale existing content first (relative to origin), then translate it up above the footer.
+    // This maps the content from [0, height] to [FOOTER_HEIGHT, height] perfectly without any gaps.
     lastPage.scaleContent(1, scaleY);
+    lastPage.translateContent(0, FOOTER_HEIGHT);
     
-    // 2. Draw white footer background
+    // Draw minimalist clean footer background
     lastPage.drawRectangle({
       x: 0,
       y: 0,
       width: width,
-      height: footerHeight,
+      height: FOOTER_HEIGHT,
       color: rgb(1, 1, 1),
     });
     
-    // 3. Draw top separator line
+    // Draw thin separator line (0.5 pt)
     lastPage.drawLine({
-      start: { x: 0, y: footerHeight },
-      end: { x: width, y: footerHeight },
-      thickness: 0.5,
-      color: rgb(0.8, 0.8, 0.8),
+      start: { x: SIDE_PADDING, y: FOOTER_HEIGHT },
+      end: { x: width - SIDE_PADDING, y: FOOTER_HEIGHT },
+      thickness: SEPARATOR_THICKNESS,
+      color: rgb(0.85, 0.85, 0.85),
     });
     
-    // 4. Draw Logo (Left side)
-    const logoSize = 25;
-    const logoY = (footerHeight - logoSize) / 2;
-    const logoX = 20;
+    // --- COLUMN 1: LEFT (20% of width) -> Logo only ---
+    const logoX = SIDE_PADDING;
+    const logoY = (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
     
     try {
       const logoPath = path.join(__dirname, '../assets/logo.jpg');
       if (fs.existsSync(logoPath)) {
         const logoBytes = fs.readFileSync(logoPath);
         const logoImage = await pdfDoc.embedJpg(logoBytes);
+        
+        // Render logo centered vertically
         lastPage.drawImage(logoImage, {
           x: logoX,
           y: logoY,
-          width: logoSize,
-          height: logoSize,
+          width: LOGO_HEIGHT,
+          height: LOGO_HEIGHT,
         });
       }
     } catch (logoErr) {
       console.error('Failed to embed logo in PDF:', logoErr.message);
     }
     
-    // 5. Draw center branded text
+    // --- COLUMN 2: CENTER (50% of width) -> Branded text stack ---
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     
-    const greeting = 'Thank you for printing with CampusPrint!';
-    const website = 'campusprint.in';
+    const textCenter = width * 0.45; // Center of the middle 50% column
     
-    const greetingSize = 8;
-    const websiteSize = 7.5;
+    const line1 = 'CampusPrint';
+    const line2 = 'Printing made effortless.';
+    const line3 = 'campusprint.in';
     
-    const greetingWidth = boldFont.widthOfTextAtSize(greeting, greetingSize);
-    const websiteWidth = font.widthOfTextAtSize(website, websiteSize);
+    const size1 = 7.5;
+    const size2 = 6.0;
+    const size3 = 5.0;
     
-    const greetingX = (width - greetingWidth) / 2;
-    const websiteX = (width - websiteWidth) / 2;
+    const w1 = boldFont.widthOfTextAtSize(line1, size1);
+    const w2 = font.widthOfTextAtSize(line2, size2);
+    const w3 = font.widthOfTextAtSize(line3, size3);
     
-    lastPage.drawText(greeting, {
-      x: greetingX,
-      y: 22,
-      size: greetingSize,
+    // Alignments
+    const x1 = textCenter - w1 / 2;
+    const x2 = textCenter - w2 / 2;
+    const x3 = textCenter - w3 / 2;
+    
+    // Vertical placement for equal optical spacing within the 15mm (42.52 pt) height
+    const y3 = 5.0;
+    const y2 = y3 + size3 + 3.0; // 13.0 pt
+    const y1 = y2 + size2 + 3.0; // 22.0 pt
+    
+    lastPage.drawText(line1, {
+      x: x1,
+      y: y1,
+      size: size1,
       font: boldFont,
-      color: rgb(0.1, 0.1, 0.2),
+      color: rgb(0.05, 0.05, 0.1),
     });
     
-    lastPage.drawText(website, {
-      x: websiteX,
-      y: 10,
-      size: websiteSize,
+    lastPage.drawText(line2, {
+      x: x2,
+      y: y2,
+      size: size2,
       font: font,
-      color: rgb(0.4, 0.4, 0.5),
+      color: rgb(0.2, 0.2, 0.25),
     });
     
-    // 6. Draw QR code(s) (Right side)
-    const qrSize = 28;
-    const qrY = 9.5;
-    const qrSpacing = 10;
-    const orderIdText = `#${orderHash.substring(0, 8).toUpperCase()}`;
-    const fontSize = 5;
+    lastPage.drawText(line3, {
+      x: x3,
+      y: y3,
+      size: size3,
+      font: font,
+      color: rgb(0.5, 0.5, 0.55),
+    });
+    
+    // --- COLUMN 3: RIGHT (30% of width) -> Dynamic QR Codes ---
+    const rightAreaMinX = width * 0.70;
+    const rightAreaMaxX = width - SIDE_PADDING;
+    const rightAreaWidth = rightAreaMaxX - rightAreaMinX;
     
     const qrsToEmbed = [];
-    if (pickupQrBase64) qrsToEmbed.push(pickupQrBase64);
-    if (deliveryQrBase64) qrsToEmbed.push(deliveryQrBase64);
+    if (pickupQrBase64) {
+      qrsToEmbed.push({
+        base64: pickupQrBase64,
+        label: deliveryQrBase64 ? 'Pickup' : `Order #${orderHash.substring(0, 8).toUpperCase()}`,
+      });
+    }
+    if (deliveryQrBase64) {
+      qrsToEmbed.push({
+        base64: deliveryQrBase64,
+        label: 'Delivery',
+      });
+    }
+    
+    // Y coordinates for QR code and caption underneath
+    const qrY = 9.0;
+    const captionY = 2.5;
+    const captionSize = 4.5;
     
     if (qrsToEmbed.length === 1) {
-      // Single QR layout
-      const qrX = width - 20 - qrSize;
+      // Single QR centered in the Right Column area
+      const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
+      const qrX = rightCenterX - QR_SIZE / 2;
       
-      const qrBytes = Buffer.from(qrsToEmbed[0].replace(/^data:image\/png;base64,/, ''), 'base64');
+      const qrBytes = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
       const qrImage = await pdfDoc.embedPng(qrBytes);
       
       lastPage.drawImage(qrImage, {
         x: qrX,
         y: qrY,
-        width: qrSize,
-        height: qrSize,
+        width: QR_SIZE,
+        height: QR_SIZE,
       });
       
-      const textWidth = font.widthOfTextAtSize(orderIdText, fontSize);
-      const textX = qrX + (qrSize - textWidth) / 2;
-      lastPage.drawText(orderIdText, {
-        x: textX,
-        y: 2.5,
-        size: fontSize,
+      const labelWidth = font.widthOfTextAtSize(qrsToEmbed[0].label, captionSize);
+      const labelX = qrX + (QR_SIZE - labelWidth) / 2;
+      lastPage.drawText(qrsToEmbed[0].label, {
+        x: labelX,
+        y: captionY,
+        size: captionSize,
         font: font,
-        color: rgb(0.2, 0.2, 0.2),
+        color: rgb(0.4, 0.4, 0.45),
       });
-    } else if (qrsToEmbed.length === 2) {
-      // Double QR layout side-by-side
-      const qrX2 = width - 20 - qrSize;
-      const qrX1 = qrX2 - qrSpacing - qrSize;
       
-      // QR 1
-      const qrBytes1 = Buffer.from(qrsToEmbed[0].replace(/^data:image\/png;base64,/, ''), 'base64');
+    } else if (qrsToEmbed.length === 2) {
+      // Double QRs spaced equally inside the Right Column area
+      const gap = (rightAreaWidth - 2 * QR_SIZE) / 3;
+      
+      const qrX1 = rightAreaMinX + gap;
+      const qrX2 = qrX1 + QR_SIZE + gap;
+      
+      // QR 1 (Order/Pickup)
+      const qrBytes1 = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
       const qrImage1 = await pdfDoc.embedPng(qrBytes1);
       lastPage.drawImage(qrImage1, {
         x: qrX1,
         y: qrY,
-        width: qrSize,
-        height: qrSize,
+        width: QR_SIZE,
+        height: QR_SIZE,
       });
       
-      const textWidth1 = font.widthOfTextAtSize(orderIdText, fontSize);
-      const textX1 = qrX1 + (qrSize - textWidth1) / 2;
-      lastPage.drawText(orderIdText, {
-        x: textX1,
-        y: 2.5,
-        size: fontSize,
+      // Order QR gets Order ID printed under it
+      const orderLabel = `Order #${orderHash.substring(0, 8).toUpperCase()}`;
+      const labelWidth1 = font.widthOfTextAtSize(orderLabel, captionSize);
+      const labelX1 = qrX1 + (QR_SIZE - labelWidth1) / 2;
+      lastPage.drawText(orderLabel, {
+        x: labelX1,
+        y: captionY,
+        size: captionSize,
         font: font,
-        color: rgb(0.2, 0.2, 0.2),
+        color: rgb(0.4, 0.4, 0.45),
       });
       
-      // QR 2
-      const qrBytes2 = Buffer.from(qrsToEmbed[1].replace(/^data:image\/png;base64,/, ''), 'base64');
+      // QR 2 (Delivery)
+      const qrBytes2 = Buffer.from(qrsToEmbed[1].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
       const qrImage2 = await pdfDoc.embedPng(qrBytes2);
       lastPage.drawImage(qrImage2, {
         x: qrX2,
         y: qrY,
-        width: qrSize,
-        height: qrSize,
+        width: QR_SIZE,
+        height: QR_SIZE,
       });
       
-      const textWidth2 = font.widthOfTextAtSize(orderIdText, fontSize);
-      const textX2 = qrX2 + (qrSize - textWidth2) / 2;
-      lastPage.drawText(orderIdText, {
-        x: textX2,
-        y: 2.5,
-        size: fontSize,
+      const labelWidth2 = font.widthOfTextAtSize(qrsToEmbed[1].label, captionSize);
+      const labelX2 = qrX2 + (QR_SIZE - labelWidth2) / 2;
+      lastPage.drawText(qrsToEmbed[1].label, {
+        x: labelX2,
+        y: captionY,
+        size: captionSize,
         font: font,
-        color: rgb(0.2, 0.2, 0.2),
+        color: rgb(0.4, 0.4, 0.45),
       });
     }
     
