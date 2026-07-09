@@ -67,6 +67,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showInstallBtn, setShowInstallBtn] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    if (!isStandalone) {
+      setShowInstallBtn(true);
+    }
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)');
@@ -149,11 +158,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Logo */}
         <div style={{
           padding: 'calc(24px + env(safe-area-inset-top, 0px)) 20px 24px 20px', borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12
         }}>
-          <Link href={`/${user.role}`} style={{ textDecoration: 'none' }}>
-            <Logo size={32} />
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Link href={`/${user.role}`} style={{ textDecoration: 'none' }}>
+              <Logo size={32} />
+            </Link>
+            
+            {showInstallBtn && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => window.dispatchEvent(new Event('trigger-pwa-install'))}
+                className="btn btn-primary btn-sm"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                📲 Install App
+              </motion.button>
+            )}
+          </div>
           <button onClick={() => setSidebarOpen(false)} className="btn btn-ghost btn-icon mobile-only"
             style={{ padding: 4 }}>
             <HiOutlineX size={20} />
@@ -233,10 +267,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}
         >
-          <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon mobile-only"
-            style={{ padding: 4, marginRight: 12 }}>
-            <HiOutlineMenu size={22} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={() => setSidebarOpen(true)} className="btn btn-ghost btn-icon mobile-only"
+              style={{ padding: 4 }}>
+              <HiOutlineMenu size={22} />
+            </button>
+            
+            {showInstallBtn && isMobile && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => window.dispatchEvent(new Event('trigger-pwa-install'))}
+                className="btn btn-primary btn-sm mobile-only"
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 6,
+                  background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+                  border: 'none',
+                  color: 'white',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                📲 Install App
+              </motion.button>
+            )}
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Logo from './ui/Logo';
+import { useAuthStore } from '@/lib/store';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -14,6 +15,7 @@ export default function InstallPrompt() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [platform, setPlatform] = useState<string>('other');
   const [browser, setBrowser] = useState<string>('other');
+  const { user } = useAuthStore();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -62,6 +64,26 @@ export default function InstallPrompt() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleTrigger = () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(({ outcome }) => {
+          if (outcome === 'accepted') {
+            setShowBanner(false);
+          }
+          setDeferredPrompt(null);
+        });
+      } else {
+        setShowInstructions(true);
+      }
+    };
+    window.addEventListener('trigger-pwa-install', handleTrigger);
+    return () => {
+      window.removeEventListener('trigger-pwa-install', handleTrigger);
+    };
+  }, [deferredPrompt]);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -78,9 +100,6 @@ export default function InstallPrompt() {
   const handleDismiss = () => {
     setShowBanner(false);
   };
-
-  // If banner is closed, do not render anything
-  if (!showBanner) return null;
 
   // Function to render platform/browser instructions
   const renderInstructionsContent = () => {
@@ -139,76 +158,78 @@ export default function InstallPrompt() {
   return (
     <>
       {/* Bottom Install Banner */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
-          left: '16px',
-          right: '16px',
-          zIndex: 9999,
-          background: 'rgba(12, 13, 22, 0.85)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          borderRadius: '16px',
-          padding: '12px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.1)',
-          animation: 'slideUpBanner 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}
-      >
-        <style>{`
-          @keyframes slideUpBanner {
-            from { transform: translateY(100px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-          }
-          @keyframes scaleUp {
-            from { transform: scale(0.95); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-          }
-        `}</style>
-
-        {/* Logo and Info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-          <div style={{ transform: 'scale(0.85)', transformOrigin: 'left center' }}>
-            <Logo size={38} />
+      {showBanner && !user && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+            left: '16px',
+            right: '16px',
+            zIndex: 9999,
+            background: 'rgba(12, 13, 22, 0.85)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '16px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.1)',
+            animation: 'slideUpBanner 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          <style>{`
+            @keyframes slideUpBanner {
+              from { transform: translateY(100px); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+            @keyframes scaleUp {
+              from { transform: scale(0.95); opacity: 0; }
+              to { transform: scale(1); opacity: 1; }
+            }
+          `}</style>
+  
+          {/* Logo and Info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+            <div style={{ transform: 'scale(0.85)', transformOrigin: 'left center' }}>
+              <Logo size={38} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                Install CampusPrint
+              </div>
+              <div style={{ fontSize: '11px', color: '#94a3b8', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                Get faster access & notifications
+              </div>
+            </div>
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#f1f5f9', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-              Install CampusPrint
-            </div>
-            <div style={{ fontSize: '11px', color: '#94a3b8', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              Get faster access & notifications
-            </div>
+  
+          {/* Actions */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <button
+              onClick={handleInstallClick}
+              style={{
+                padding: '6px 14px',
+                background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(59, 130, 246, 0.3)',
+                transition: 'transform 0.2s',
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
+              onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              {deferredPrompt ? 'Install' : 'Get App'}
+            </button>
           </div>
         </div>
-
-        {/* Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-          <button
-            onClick={handleInstallClick}
-            style={{
-              padding: '6px 14px',
-              background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(59, 130, 246, 0.3)',
-              transition: 'transform 0.2s',
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
-            onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          >
-            {deferredPrompt ? 'Install' : 'Get App'}
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Instructions Modal Overlay */}
       {showInstructions && (
