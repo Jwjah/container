@@ -430,7 +430,9 @@ exports.downloadFile = async (req, res) => {
     }
     // Return full URL to ensure browser can find the file across domains
     const baseUrl = (process.env.API_URL || '').replace('/api', '');
-    res.json({ url: `${baseUrl}${file.file_path}` });
+    const isRemote = file.file_path.startsWith('http://') || file.file_path.startsWith('https://');
+    const downloadUrl = isRemote ? file.file_path : `${baseUrl}${file.file_path}`;
+    res.json({ url: downloadUrl });
   } catch (err) {
     console.error('Download file error:', err);
     res.status(500).json({ error: 'Failed to download file' });
