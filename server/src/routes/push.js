@@ -9,10 +9,12 @@ router.post('/subscribe', authenticate, async (req, res) => {
     const { subscription } = req.body;
     
     if (!subscription || !subscription.endpoint || !subscription.keys) {
+      console.warn('📬 [Push Subscribe] Invalid subscription payload received for user:', req.user.id);
       return res.status(400).json({ error: 'Invalid subscription object' });
     }
 
     const { endpoint, keys } = subscription;
+    console.log(`📬 [Push Subscribe] Request from User ID: ${req.user.id}, Endpoint: ${endpoint.substring(0, 45)}...`);
     
     // Avoid duplicates
     const [existing] = await db.execute(
@@ -21,11 +23,11 @@ router.post('/subscribe', authenticate, async (req, res) => {
     );
     
     if (existing.length > 0) {
-      // Update existing if keys changed, though usually endpoint changes when keys change
       await db.execute(
         'UPDATE push_subscriptions SET p256dh = ?, auth = ? WHERE id = ?',
         [keys.p256dh, keys.auth, existing[0].id]
       );
+      console.log(`📬 [Push Subscribe] Updated subscription details for User ID: ${req.user.id}`);
       return res.json({ message: 'Push subscription updated' });
     }
     
@@ -33,10 +35,11 @@ router.post('/subscribe', authenticate, async (req, res) => {
       'INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)',
       [req.user.id, endpoint, keys.p256dh, keys.auth]
     );
+    console.log(`📬 [Push Subscribe] Saved new subscription successfully for User ID: ${req.user.id}`);
     
     res.status(201).json({ message: 'Push subscription saved' });
   } catch (err) {
-    console.error('Push subscribe error:', err);
+    console.error('📬 [Push Subscribe Error]:', err);
     res.status(500).json({ error: 'Failed to save subscription' });
   }
 });

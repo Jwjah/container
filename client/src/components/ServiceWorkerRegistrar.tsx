@@ -111,26 +111,48 @@ export default function ServiceWorkerRegistrar() {
 
 async function subscribeToPush(registration: ServiceWorkerRegistration) {
   try {
-    // Check if already subscribed
-    const existingSubscription = await registration.pushManager.getSubscription();
-    if (existingSubscription) {
-      // Already subscribed, send to backend in case it's a new session
-      try {
-        await api.post('/push/subscribe', { subscription: existingSubscription.toJSON() });
-      } catch {
-        // Ignore — subscription may already exist in DB
-      }
-      return;
-    }
-
-    // Request notification permission
+    // Request notification permission first to make sure we have access
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       console.log('🔕 Notification permission denied');
       return;
     }
 
-    // Subscribe to push
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      // Check if the VAPID keys match to avoid sending a mismatched/stale subscription key
+      const currentKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      const subKey = existingSubscription.options.applicationServerKey 
+        ? new Uint8Array(existingSubscription.options.applicationServerKey)
+        : null;
+
+      let keyMatches = subKey !== null && currentKey.length === subKey.length;
+      if (keyMatches && subKey) {
+        for (let i = 0; i < currentKey.length; i++) {
+          if (currentKey[i] !== subKey[i]) {
+            keyMatches = false;
+            break;
+          }
+        }
+      }
+
+      if (keyMatches) {
+        // VAPID keys match. Send to backend in case it's a new database/session
+        try {
+          await api.post('/push/subscribe', { subscription: existingSubscription.toJSON() });
+          console.log('🔄 Synced existing push subscription with backend');
+        } catch (syncErr) {
+          console.warn('⚠️ Push subscription sync failed:', syncErr);
+        }
+        return;
+      } else {
+        // VAPID key mismatch (e.g. from an old build or empty key). Clean unsubscribe.
+        console.log('🔄 Old/Mismatched push subscription detected. Unsubscribing...');
+        await existingSubscription.unsubscribe();
+      }
+    }
+
+    // Subscribe to push with current correct key
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
@@ -138,7 +160,7 @@ async function subscribeToPush(registration: ServiceWorkerRegistration) {
 
     // Send subscription to backend
     await api.post('/push/subscribe', { subscription: subscription.toJSON() });
-    console.log('🔔 Push notification subscription saved');
+    console.log('🔔 New push notification subscription saved and registered');
   } catch (err) {
     console.warn('⚠️ Push subscription failed:', err);
   }
