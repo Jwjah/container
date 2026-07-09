@@ -107,6 +107,14 @@ self.addEventListener('push', (event) => {
     },
   };
 
+  // Broadcast to active/background open tabs to play a sound if window is open
+  try {
+    const channel = new BroadcastChannel('push-notification');
+    channel.postMessage({ type: 'push-received', data });
+  } catch (broadcastErr) {
+    console.warn('[SW] BroadcastChannel failed:', broadcastErr);
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title || 'CampusPrint', options)
   );
