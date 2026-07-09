@@ -559,8 +559,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr,
-              o.print_type, o.layout, o.copies, o.paper, o.created_at
+      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -599,15 +598,7 @@ exports.downloadPrintPdf = async (req, res) => {
         file.order_hash,
         file.id,
         file.pickup_qr,
-        file.delivery_qr,
-        {
-          print_type: file.print_type,
-          layout: file.layout,
-          copies: file.copies,
-          paper: file.paper,
-          created_at: file.created_at,
-          page_count: file.page_count
-        }
+        file.delivery_qr
       );
     } catch (processErr) {
       console.error('PDF modifications failed, sending original:', processErr.message);

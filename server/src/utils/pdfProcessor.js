@@ -9,17 +9,16 @@ const FOOTER_HEIGHT = 15 * MM_TO_PT;       // 15 mm = 42.52 pt
 const QR_SIZE = 12 * MM_TO_PT;             // 12 mm = 34.02 pt
 const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm = 28.35 pt
 const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm = 22.68 pt
-const SEPARATOR_THICKNESS = 0.5;           // 0.5 pt
+const SEPARATOR_THICKNESS = 0.3;           // 0.3 pt (ultra-thin line)
 
 class FooterRenderer {
-  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, metadata = {}) {
+  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr) {
     this.page = page;
     this.pdfDoc = pdfDoc;
     this.orderHash = orderHash;
     this.orderId = orderId;
     this.pickupQr = pickupQr;
     this.deliveryQr = deliveryQr;
-    this.metadata = metadata;
     
     const { width, height } = page.getSize();
     this.width = width;
@@ -46,12 +45,12 @@ class FooterRenderer {
   }
 
   drawSeparator() {
-    // Draw thin separator line (0.5 pt)
+    // Draw very light, thin separator line
     this.page.drawLine({
       start: { x: SIDE_PADDING, y: FOOTER_HEIGHT },
       end: { x: this.width - SIDE_PADDING, y: FOOTER_HEIGHT },
       thickness: SEPARATOR_THICKNESS,
-      color: rgb(0.85, 0.85, 0.85),
+      color: rgb(0.91, 0.91, 0.93),
     });
   }
 
@@ -100,7 +99,7 @@ class FooterRenderer {
       y: y1,
       size: size1,
       font: this.boldFont,
-      color: rgb(0.05, 0.05, 0.1),
+      color: rgb(0.1, 0.1, 0.15),
     });
     
     this.page.drawText(line2, {
@@ -108,7 +107,7 @@ class FooterRenderer {
       y: y2,
       size: size2,
       font: this.font,
-      color: rgb(0.2, 0.2, 0.25),
+      color: rgb(0.3, 0.3, 0.35),
     });
     
     this.page.drawText(line3, {
@@ -120,67 +119,9 @@ class FooterRenderer {
     });
   }
 
-  drawCenterRightColumn() {
-    // Column range: [50% of width, 70% of width]
-    const colMinX = this.width * 0.50;
-    const colMaxX = this.width * 0.70;
-    const colCenterX = (colMinX + colMaxX) / 2;
-    
-    // Format metadata values
-    const shortId = this.orderHash ? this.orderHash.substring(0, 8).toUpperCase() : 'N/A';
-    
-    let formattedDate = 'N/A';
-    if (this.metadata.created_at) {
-      try {
-        formattedDate = new Date(this.metadata.created_at).toLocaleDateString('en-GB', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-        });
-      } catch (e) {
-        formattedDate = String(this.metadata.created_at).substring(0, 10);
-      }
-    } else {
-      formattedDate = new Date().toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    }
-
-    const pages = this.metadata.page_count || 1;
-    const printType = this.metadata.print_type === 'color' ? 'Color' : 'B&W';
-    const copies = this.metadata.copies || 1;
-    const paperSize = this.metadata.paper || 'A4';
-    const duplex = this.metadata.layout === 'double' ? 'Yes' : 'No';
-
-    const size = 4.5;
-    const spacingY = 6.5;
-    
-    // Left Grid Column coordinates
-    const x1 = colMinX + 2 * MM_TO_PT;
-    // Right Grid Column coordinates
-    const x2 = colCenterX + 2 * MM_TO_PT;
-
-    // Baselines matched to other columns
-    const y3 = 5.0;
-    const y2 = y3 + size + spacingY;
-    const y1 = y2 + size + spacingY;
-
-    // Col 1
-    this.page.drawText(`Order: CP${shortId}`, { x: x1, y: y1, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-    this.page.drawText(`Date: ${formattedDate}`, { x: x1, y: y2, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-    this.page.drawText(`Pages: ${pages}`, { x: x1, y: y3, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-
-    // Col 2
-    this.page.drawText(`Print: ${printType}`, { x: x2, y: y1, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-    this.page.drawText(`Paper: ${paperSize} (${copies} cop)`, { x: x2, y: y2, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-    this.page.drawText(`Duplex: ${duplex}`, { x: x2, y: y3, size, font: this.font, color: rgb(0.45, 0.45, 0.5) });
-  }
-
   async drawRightColumn() {
-    // Dynamic QR Column range: [70% of width, width - SIDE_PADDING]
-    const rightAreaMinX = this.width * 0.70;
+    // Dynamic QR Column range: [65% of width, width - SIDE_PADDING]
+    const rightAreaMinX = this.width * 0.65;
     const rightAreaMaxX = this.width - SIDE_PADDING;
     const rightAreaWidth = rightAreaMaxX - rightAreaMinX;
     
@@ -190,7 +131,7 @@ class FooterRenderer {
     if (this.pickupQr) {
       qrsToEmbed.push({
         base64: this.pickupQr,
-        label1: this.deliveryQr ? 'Pickup' : 'Order',
+        label1: this.deliveryQr ? 'Order' : 'Pickup',
         label2: `CP${shortId}`,
       });
     }
@@ -209,7 +150,7 @@ class FooterRenderer {
     const captionSize = 4.0;
     
     if (qrsToEmbed.length === 1) {
-      // Single QR layout
+      // Single QR layout (Centered in right column)
       const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
       const qrX = rightCenterX - QR_SIZE / 2;
       
@@ -230,7 +171,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
       
       // Caption Line 2
@@ -240,11 +181,11 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
       
     } else if (qrsToEmbed.length === 2) {
-      // Double QR Layout
+      // Double QR Layout spaced equally inside right area
       const gap = (rightAreaWidth - 2 * QR_SIZE) / 3;
       const qrX1 = rightAreaMinX + gap;
       const qrX2 = qrX1 + QR_SIZE + gap;
@@ -265,7 +206,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
       
       const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
@@ -274,7 +215,7 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
 
       // QR 2
@@ -293,7 +234,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
       
       const w4 = this.font.widthOfTextAtSize(qrsToEmbed[1].label2, captionSize);
@@ -302,13 +243,13 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.4, 0.4, 0.45),
+        color: rgb(0.55, 0.55, 0.6),
       });
     }
   }
 
   drawVersioning() {
-    const versionText = 'CampusPrint • 2026';
+    const versionText = 'CP v1.0';
     const vSize = 5.0;
     const vWidth = this.font.widthOfTextAtSize(versionText, vSize);
     
@@ -322,7 +263,7 @@ class FooterRenderer {
       y: vy,
       size: vSize,
       font: this.font,
-      color: rgb(0.7, 0.7, 0.75),
+      color: rgb(0.8, 0.8, 0.82),
     });
   }
 
@@ -330,7 +271,6 @@ class FooterRenderer {
     this.drawBackground();
     this.drawSeparator();
     await this.drawLeftColumn();
-    this.drawCenterRightColumn();
     await this.drawRightColumn();
     this.drawVersioning();
   }
@@ -344,10 +284,9 @@ class FooterRenderer {
  * @param {string} orderId - The order ID
  * @param {string} pickupQrBase64 - Base64 data URL for pickup QR code
  * @param {string} deliveryQrBase64 - Base64 data URL for delivery QR code (optional)
- * @param {Object} metadata - Printing metadata options (optional)
  * @returns {Promise<Buffer>} - Modified PDF buffer
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, metadata = {}) {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64) {
   try {
     const pdfDoc = await PDFDocument.load(pdfBuffer);
     const pages = pdfDoc.getPages();
@@ -358,12 +297,6 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
     
     const lastPage = pages[pages.length - 1];
     const { height } = lastPage.getSize();
-    
-    // Inject page count into metadata
-    const enrichedMetadata = {
-      ...metadata,
-      page_count: pages.length,
-    };
     
     // Calculate the vertical scale factor to fit the 15mm footer
     const scaleY = (height - FOOTER_HEIGHT) / height;
@@ -379,8 +312,7 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       orderHash,
       orderId,
       pickupQrBase64,
-      deliveryQrBase64,
-      enrichedMetadata
+      deliveryQrBase64
     );
     await renderer.loadFonts();
     await renderer.render();
