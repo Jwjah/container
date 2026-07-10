@@ -202,19 +202,20 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
     let printActionScript = '';
     for (let i = 0; i < copies; i++) {
       if (fs.existsSync(exePath)) {
-        printActionScript += `& '${exePath}' '${filePath}'; Start-Sleep -Seconds 1; `;
+        printActionScript += `& '${exePath}' '${filePath}' $targetPrinter; Start-Sleep -Seconds 1; `;
       } else {
-        printActionScript += `$val = Start-Process -FilePath '${filePath}' -Verb Print -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }; `;
+        printActionScript += `$val = Start-Process -FilePath '${filePath}' -Verb PrintTo -ArgumentList $targetPrinter -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }; `;
       }
     }
 
     printCmd = `powershell -Command "` +
-      `$p = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name; ` +
-      `$cfg = Get-PrintConfiguration -PrinterName $p; ` +
+      `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
+      `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
+      `$cfg = Get-PrintConfiguration -PrinterName $targetPrinter; ` +
       `$origC = $cfg.Color; $origD = $cfg.DuplexingMode; ` +
-      `Set-PrintConfiguration -PrinterName $p -Color ${colorVal} -DuplexingMode ${duplexVal}; ` +
+      `Set-PrintConfiguration -PrinterName $targetPrinter -Color ${colorVal} -DuplexingMode ${duplexVal}; ` +
       printActionScript +
-      `Set-PrintConfiguration -PrinterName $p -Color $origC -DuplexingMode $origD` +
+      `Set-PrintConfiguration -PrinterName $targetPrinter -Color $origC -DuplexingMode $origD` +
       `"`;
   } else {
     // macOS / Linux: Use lp command with native command-line options

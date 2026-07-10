@@ -1,6 +1,7 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 
 // Configurable Printer Profile constants (in mm)
 const printerBottomMarginMM = 3.0;      // Physical non-printable area at the bottom
@@ -31,13 +32,14 @@ const SIDE_PADDING = 8 * MM_TO_PT;
 const SEPARATOR_THICKNESS = 0.3;           
 
 class FooterRenderer {
-  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr) {
+  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw') {
     this.page = page;
     this.pdfDoc = pdfDoc;
     this.orderHash = orderHash;
     this.orderId = orderId;
     this.pickupQr = pickupQr;
     this.deliveryQr = deliveryQr;
+    this.printType = printType;
     
     const { width, height } = page.getSize();
     this.width = width;
@@ -64,12 +66,14 @@ class FooterRenderer {
   }
 
   drawSeparator() {
+    const isBw = this.printType === 'bw';
+    const separatorColor = isBw ? rgb(0.9, 0.9, 0.9) : rgb(0.91, 0.91, 0.93);
     // Draw very light, thin separator line
     this.page.drawLine({
       start: { x: SIDE_PADDING, y: SEPARATOR_Y },
       end: { x: this.width - SIDE_PADDING, y: SEPARATOR_Y },
       thickness: SEPARATOR_THICKNESS,
-      color: rgb(0.91, 0.91, 0.93),
+      color: separatorColor,
     });
   }
 
@@ -77,11 +81,14 @@ class FooterRenderer {
     const logoX = SIDE_PADDING;
     const logoY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
     
-    // 1. Draw Logo
+    // 1. Draw Logo (Grayscale converted dynamically via sharp if B&W)
     try {
       const logoPath = path.join(__dirname, '../assets/logo.jpg');
       if (fs.existsSync(logoPath)) {
-        const logoBytes = fs.readFileSync(logoPath);
+        let logoBytes = fs.readFileSync(logoPath);
+        if (this.printType === 'bw') {
+          logoBytes = await sharp(logoBytes).grayscale().toBuffer();
+        }
         const logoImage = await this.pdfDoc.embedJpg(logoBytes);
         this.page.drawImage(logoImage, {
           x: logoX,
@@ -113,12 +120,17 @@ class FooterRenderer {
     const y2 = y3 + size3 + 1.5;
     const y1 = y2 + size2 + 1.5;
 
+    const isBw = this.printType === 'bw';
+    const colorLine1 = isBw ? rgb(0.1, 0.1, 0.1) : rgb(0.1, 0.1, 0.15);
+    const colorLine2 = isBw ? rgb(0.3, 0.3, 0.3) : rgb(0.3, 0.3, 0.35);
+    const colorLine3 = isBw ? rgb(0.55, 0.55, 0.55) : rgb(0.55, 0.55, 0.6);
+
     this.page.drawText(line1, {
       x: textX,
       y: y1,
       size: size1,
       font: this.boldFont,
-      color: rgb(0.1, 0.1, 0.15),
+      color: colorLine1,
     });
     
     this.page.drawText(line2, {
@@ -126,7 +138,7 @@ class FooterRenderer {
       y: y2,
       size: size2,
       font: this.font,
-      color: rgb(0.3, 0.3, 0.35),
+      color: colorLine2,
     });
     
     this.page.drawText(line3, {
@@ -134,7 +146,7 @@ class FooterRenderer {
       y: y3,
       size: size3,
       font: this.font,
-      color: rgb(0.55, 0.55, 0.6),
+      color: colorLine3,
     });
   }
 
@@ -168,12 +180,18 @@ class FooterRenderer {
     const cap2Y = FOOTER_BOTTOM_Y + 0.3 * MM_TO_PT;
     const captionSize = 3.0;
     
+    const isBw = this.printType === 'bw';
+    const captionColor = isBw ? rgb(0.55, 0.55, 0.55) : rgb(0.55, 0.55, 0.6);
+
     if (qrsToEmbed.length === 1) {
       // Single QR layout (Centered in right column)
       const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
       const qrX = rightCenterX - QR_SIZE / 2;
       
-      const qrBytes = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      let qrBytes = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      if (isBw) {
+        qrBytes = await sharp(qrBytes).grayscale().toBuffer();
+      }
       const qrImage = await this.pdfDoc.embedPng(qrBytes);
       
       this.page.drawImage(qrImage, {
@@ -190,7 +208,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
       
       // Caption Line 2
@@ -200,7 +218,7 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
       
     } else if (qrsToEmbed.length === 2) {
@@ -210,7 +228,10 @@ class FooterRenderer {
       const qrX2 = qrX1 + QR_SIZE + gap;
       
       // QR 1
-      const qrBytes1 = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      let qrBytes1 = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      if (isBw) {
+        qrBytes1 = await sharp(qrBytes1).grayscale().toBuffer();
+      }
       const qrImage1 = await this.pdfDoc.embedPng(qrBytes1);
       this.page.drawImage(qrImage1, {
         x: qrX1,
@@ -225,7 +246,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
       
       const w2 = this.font.widthOfTextAtSize(qrsToEmbed[0].label2, captionSize);
@@ -234,11 +255,14 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
 
       // QR 2
-      const qrBytes2 = Buffer.from(qrsToEmbed[1].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      let qrBytes2 = Buffer.from(qrsToEmbed[1].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
+      if (isBw) {
+        qrBytes2 = await sharp(qrBytes2).grayscale().toBuffer();
+      }
       const qrImage2 = await this.pdfDoc.embedPng(qrBytes2);
       this.page.drawImage(qrImage2, {
         x: qrX2,
@@ -253,7 +277,7 @@ class FooterRenderer {
         y: cap1Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
       
       const w4 = this.font.widthOfTextAtSize(qrsToEmbed[1].label2, captionSize);
@@ -262,7 +286,7 @@ class FooterRenderer {
         y: cap2Y,
         size: captionSize,
         font: this.font,
-        color: rgb(0.55, 0.55, 0.6),
+        color: captionColor,
       });
     }
   }
@@ -275,12 +299,15 @@ class FooterRenderer {
     const vx = this.width - SIDE_PADDING - vWidth;
     const vy = FOOTER_BOTTOM_Y + 0.5 * MM_TO_PT;
 
+    const isBw = this.printType === 'bw';
+    const versionColor = isBw ? rgb(0.8, 0.8, 0.8) : rgb(0.8, 0.8, 0.82);
+
     this.page.drawText(versionText, {
       x: vx,
       y: vy,
       size: vSize,
       font: this.font,
-      color: rgb(0.8, 0.8, 0.82),
+      color: versionColor,
     });
   }
 
@@ -297,7 +324,7 @@ class FooterRenderer {
  * Modifies the last page of the PDF using embedded FormXObject scaling to avoid content clipping.
  * All positions and scaling are derived dynamically from the printer profile configuration.
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64) {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw') {
   try {
     const pdfDoc = await PDFDocument.load(pdfBuffer);
     const pages = pdfDoc.getPages();
@@ -335,7 +362,8 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       orderHash,
       orderId,
       pickupQrBase64,
-      deliveryQrBase64
+      deliveryQrBase64,
+      printType
     );
     await renderer.loadFonts();
     await renderer.render();
