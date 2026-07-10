@@ -40,7 +40,7 @@ function registerMacAutostart() {
 
   const homeDir = os.homedir();
   const launchAgentsDir = path.join(homeDir, 'Library', 'LaunchAgents');
-  
+
   if (!fs.existsSync(launchAgentsDir)) {
     fs.mkdirSync(launchAgentsDir, { recursive: true });
   }
@@ -135,7 +135,7 @@ function runInteractiveSetup() {
 
           fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
           console.log('✅ Configuration successfully saved!');
-          
+
           API_BASE_URL = config.API_BASE_URL;
           SHOP_ID = config.SHOP_ID;
           AUTH_TOKEN = config.AUTH_TOKEN;
@@ -186,13 +186,13 @@ async function downloadFile(url, dest) {
 function printFile(filePath) {
   const logMsg = `🖨️  [PRINTER AGENT] Triggering physical print for: ${filePath}`;
   console.log(logMsg);
-  
+
   // Write to internal agent log for background verification
   fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ${logMsg}\n`);
 
   const isWindows = process.platform === 'win32';
   let printCmd;
-  
+
   if (isWindows) {
     // Windows: Use PowerShell to print silently to default printer using the system print verb
     printCmd = `powershell -Command "Start-Process -FilePath '${filePath}' -Verb Print -WindowStyle Hidden"`;
@@ -205,7 +205,7 @@ function printFile(filePath) {
     if (err) {
       console.warn('❌ Direct physical printing failed:', err.message.trim());
       fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ❌ Direct print failed: ${err.message}\n`);
-      
+
       // Fallback: Open the file in the default OS viewer (browser or Preview) so they can print it manually
       console.log('📂 Opening file in default PDF viewer as fallback...');
       const openCommand = isWindows ? 'start ""' : 'open';
@@ -229,7 +229,7 @@ async function pollForJobs() {
     });
 
     const jobs = response.data.jobs || [];
-    
+
     if (jobs.length > 0) {
       console.log(`\n📥 Received ${jobs.length} new print jobs!`);
     }
@@ -237,10 +237,10 @@ async function pollForJobs() {
     for (const job of jobs) {
       console.log(`⏳ Downloading Order #${job.orderId} - ${job.fileName}...`);
       const filePath = path.join(TEMP_DIR, `${job.orderId}_${job.fileName}`);
-      
+
       await downloadFile(job.fileUrl, filePath);
       console.log(`💾 Saved to local disk: ${filePath}`);
-      
+
       printFile(filePath);
     }
   } catch (error) {

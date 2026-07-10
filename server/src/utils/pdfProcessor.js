@@ -2,14 +2,33 @@ const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 
-// Reusable physical layout constants (converted to PDF points: 1 mm = 2.83465 pt)
-const MM_TO_PT = 2.83465;
+// Configurable Printer Profile constants (in mm)
+const printerBottomMarginMM = 3.0;      // Physical non-printable area at the bottom
+const footerHeightMM = 10.0;           // Height of the CampusPrint brand footer box
+const footerBottomPaddingMM = 1.0;     // Padding below the footer box
+const separatorGapMM = 2.0;            // Gap between the separator line and document content
 
-const FOOTER_HEIGHT = 15 * MM_TO_PT;       // 15 mm = 42.52 pt
-const QR_SIZE = 12 * MM_TO_PT;             // 12 mm = 34.02 pt
-const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm = 28.35 pt
-const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm = 22.68 pt
-const SEPARATOR_THICKNESS = 0.3;           // 0.3 pt (ultra-thin line)
+const MM_TO_PT = 2.83465; // 1 mm = 2.83465 PDF points
+
+// Calculated physical layout points
+const PRINTER_BOTTOM_MARGIN = printerBottomMarginMM * MM_TO_PT;
+const FOOTER_BOTTOM_PADDING = footerBottomPaddingMM * MM_TO_PT;
+const FOOTER_HEIGHT = footerHeightMM * MM_TO_PT;
+const SEPARATOR_GAP = separatorGapMM * MM_TO_PT;
+
+// Compute footer position dynamically
+const FOOTER_BOTTOM_Y = PRINTER_BOTTOM_MARGIN + FOOTER_BOTTOM_PADDING;
+const FOOTER_TOP_Y = FOOTER_BOTTOM_Y + FOOTER_HEIGHT;
+const SEPARATOR_Y = FOOTER_TOP_Y;
+
+// Total reserved space at the bottom to compress/scale the last page content
+const RESERVED_SPACE = SEPARATOR_Y + SEPARATOR_GAP;
+
+// Element dimensions scaled down to fit cleanly inside the 10mm footer
+const QR_SIZE = 7.5 * MM_TO_PT;             
+const LOGO_HEIGHT = 7.5 * MM_TO_PT;         
+const SIDE_PADDING = 8 * MM_TO_PT;         
+const SEPARATOR_THICKNESS = 0.3;           
 
 class FooterRenderer {
   constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr) {
@@ -37,7 +56,7 @@ class FooterRenderer {
     // Draw minimalist clean white footer background
     this.page.drawRectangle({
       x: 0,
-      y: 0,
+      y: FOOTER_BOTTOM_Y,
       width: this.width,
       height: FOOTER_HEIGHT,
       color: rgb(1, 1, 1),
@@ -47,8 +66,8 @@ class FooterRenderer {
   drawSeparator() {
     // Draw very light, thin separator line
     this.page.drawLine({
-      start: { x: SIDE_PADDING, y: FOOTER_HEIGHT },
-      end: { x: this.width - SIDE_PADDING, y: FOOTER_HEIGHT },
+      start: { x: SIDE_PADDING, y: SEPARATOR_Y },
+      end: { x: this.width - SIDE_PADDING, y: SEPARATOR_Y },
       thickness: SEPARATOR_THICKNESS,
       color: rgb(0.91, 0.91, 0.93),
     });
@@ -56,7 +75,7 @@ class FooterRenderer {
 
   async drawLeftColumn() {
     const logoX = SIDE_PADDING;
-    const logoY = (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
+    const logoY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
     
     // 1. Draw Logo
     try {
@@ -82,17 +101,17 @@ class FooterRenderer {
     const line2 = 'Printing made effortless.';
     const line3 = 'campusprint.in';
     
-    const size1 = 6.5;
-    const size2 = 5.0;
-    const size3 = 4.5;
+    const size1 = 5.5;
+    const size2 = 4.0;
+    const size3 = 3.5;
     
-    // Vertical placement centered in FOOTER_HEIGHT (total text height = 20pt)
-    const textBlockHeight = size1 + size2 + size3 + 4.0;
-    const startY = (FOOTER_HEIGHT - textBlockHeight) / 2;
+    // Vertical placement centered inside the footer box
+    const textBlockHeight = size1 + size2 + size3 + 3.0;
+    const startY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - textBlockHeight) / 2;
     
     const y3 = startY;
-    const y2 = y3 + size3 + 2.0;
-    const y1 = y2 + size2 + 2.0;
+    const y2 = y3 + size3 + 1.5;
+    const y1 = y2 + size2 + 1.5;
 
     this.page.drawText(line1, {
       x: textX,
@@ -143,11 +162,11 @@ class FooterRenderer {
       });
     }
     
-    // Layout parameters
-    const qrY = 11.5;
-    const cap1Y = 6.0;
-    const cap2Y = 1.5;
-    const captionSize = 4.0;
+    // Layout parameters centered inside footer height
+    const qrY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - QR_SIZE) / 2;
+    const cap1Y = FOOTER_BOTTOM_Y + 1.2 * MM_TO_PT;
+    const cap2Y = FOOTER_BOTTOM_Y + 0.3 * MM_TO_PT;
+    const captionSize = 3.0;
     
     if (qrsToEmbed.length === 1) {
       // Single QR layout (Centered in right column)
@@ -250,14 +269,12 @@ class FooterRenderer {
 
   drawVersioning() {
     const versionText = 'CP v1.0';
-    const vSize = 5.0;
+    const vSize = 4.0;
     const vWidth = this.font.widthOfTextAtSize(versionText, vSize);
     
-    // Position at the extreme bottom right, offset by SIDE_PADDING
     const vx = this.width - SIDE_PADDING - vWidth;
-    const vy = 1.5;
+    const vy = FOOTER_BOTTOM_Y + 0.5 * MM_TO_PT;
 
-    // Draw almost-invisible version string
     this.page.drawText(versionText, {
       x: vx,
       y: vy,
@@ -277,14 +294,8 @@ class FooterRenderer {
 }
 
 /**
- * Modifies the last page of the PDF to compress it vertically and add a branded footer.
- * 
- * @param {Buffer} pdfBuffer - Original PDF buffer
- * @param {string} orderHash - The order hash (used for short order ID)
- * @param {string} orderId - The order ID
- * @param {string} pickupQrBase64 - Base64 data URL for pickup QR code
- * @param {string} deliveryQrBase64 - Base64 data URL for delivery QR code (optional)
- * @returns {Promise<Buffer>} - Modified PDF buffer
+ * Modifies the last page of the PDF using embedded FormXObject scaling to avoid content clipping.
+ * All positions and scaling are derived dynamically from the printer profile configuration.
  */
 async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64) {
   try {
@@ -306,10 +317,10 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
     const newPage = pdfDoc.addPage([width, height]);
     
     // 3. Draw the embedded page content onto the new page, scaled vertically to leave space for the footer
-    const scaledHeight = height - FOOTER_HEIGHT;
+    const scaledHeight = height - RESERVED_SPACE;
     newPage.drawPage(embeddedPage, {
       x: 0,
-      y: FOOTER_HEIGHT,
+      y: RESERVED_SPACE,
       width: width,
       height: scaledHeight,
     });
