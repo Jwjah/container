@@ -194,29 +194,24 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
   let printCmd;
 
   if (isWindows) {
-    // Windows: Use Set-PrintConfiguration in PowerShell to configure user print properties temporarily
-    const colorVal = printType === 'color' ? '$true' : '$false';
-    const duplexVal = layout === 'double' ? 'TwoSidedLongEdge' : 'OneSided';
-    const exePath = path.join(__dirname, 'PDFtoPrinter.exe');
+    const exePath = path.join(__dirname, 'SumatraPDF.exe');
+    const settingsStr = `${printType === 'bw' ? 'monochrome' : 'color'},${layout === 'double' ? 'duplex' : 'simplex'},${copies}x`;
 
-    let printActionScript = '';
-    for (let i = 0; i < copies; i++) {
-      if (fs.existsSync(exePath)) {
-        printActionScript += `& '${exePath}' '${filePath}' $targetPrinter; Start-Sleep -Seconds 1; `;
-      } else {
-        printActionScript += `$val = Start-Process -FilePath '${filePath}' -Verb PrintTo -ArgumentList $targetPrinter -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }; `;
-      }
+    if (fs.existsSync(exePath)) {
+      printCmd = `powershell -Command "` +
+        `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
+        `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
+        `Start-Process -FilePath '${exePath}' -ArgumentList '-print-to', \\"$targetPrinter\\", '-print-settings', \\"${settingsStr}\\", '-silent', '${filePath}' -Wait` +
+        `"`;
+    } else {
+      printCmd = `powershell -Command "` +
+        `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
+        `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
+        `$val = Start-Process -FilePath '${filePath}' -Verb PrintTo -ArgumentList $targetPrinter -PassThru -WindowStyle Hidden; ` +
+        `Start-Sleep -Seconds 5; ` +
+        `If ($val) { Stop-Process -Id $val.Id -Force }` +
+        `"`;
     }
-
-    printCmd = `powershell -Command "` +
-      `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
-      `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
-      `$cfg = Get-PrintConfiguration -PrinterName $targetPrinter; ` +
-      `$origC = $cfg.Color; $origD = $cfg.DuplexingMode; ` +
-      `Set-PrintConfiguration -PrinterName $targetPrinter -Color ${colorVal} -DuplexingMode ${duplexVal}; ` +
-      printActionScript +
-      `Set-PrintConfiguration -PrinterName $targetPrinter -Color $origC -DuplexingMode $origD` +
-      `"`;
   } else {
     // macOS / Linux: Use lp command with native command-line options and robust fallbacks
     const colorOpt = printType === 'bw' 
@@ -279,13 +274,13 @@ async function pollForJobs() {
   setTimeout(pollForJobs, POLL_INTERVAL_MS);
 }
 
-// Ensure PDFtoPrinter.exe is downloaded on Windows for silent printing
-async function ensurePDFtoPrinter() {
-  const exePath = path.join(__dirname, 'PDFtoPrinter.exe');
+// Ensure SumatraPDF.exe is downloaded on Windows for silent printing
+async function ensureSumatraPDF() {
+  const exePath = path.join(__dirname, 'SumatraPDF.exe');
   if (fs.existsSync(exePath)) return true;
 
-  console.log('📦 Windows detected: Downloading silent physical printing helper (PDFtoPrinter)...');
-  const url = 'https://github.com/svishnevsky/PDFtoPrinter/raw/master/PDFtoPrinter.exe';
+  console.log('📦 Windows detected: Downloading silent physical printing helper (SumatraPDF)...');
+  const url = 'https://www.sumatrapdfreader.org/dl/SumatraPDF-3.5.2-32.exe';
   
   try {
     const response = await axios({
@@ -303,10 +298,10 @@ async function ensurePDFtoPrinter() {
       writer.on('finish', resolve);
       writer.on('error', reject);
     });
-    console.log('✅ Printing helper successfully downloaded!');
+    console.log('✅ SumatraPDF successfully downloaded!');
     return true;
   } catch (err) {
-    console.error('❌ Failed to download printing helper:', err.message);
+    console.error('❌ Failed to download SumatraPDF:', err.message);
     return false;
   }
 }
@@ -316,7 +311,7 @@ async function startPolling() {
   console.log(`📡 Listening for print jobs for Shop ID: ${SHOP_ID}...`);
   
   if (process.platform === 'win32') {
-    await ensurePDFtoPrinter();
+    await ensureSumatraPDF();
   }
   
   pollForJobs();

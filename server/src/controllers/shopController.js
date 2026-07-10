@@ -208,8 +208,8 @@ exports.triggerPrint = async (req, res) => {
       });
     }
 
-    // Also update order status to printing
-    await db.execute("UPDATE orders SET status = 'printing' WHERE id = ?", [orderId]);
+    // Also update order status to ready directly so the student can scan and pickup immediately
+    await db.execute("UPDATE orders SET status = 'ready' WHERE id = ?", [orderId]);
 
     res.json({ message: 'Print job sent to local agent!' });
   } catch (err) {
