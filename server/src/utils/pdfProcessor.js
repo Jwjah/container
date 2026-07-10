@@ -295,19 +295,31 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       throw new Error('PDF has no pages');
     }
     
-    const lastPage = pages[pages.length - 1];
-    const { height } = lastPage.getSize();
+    const lastPageIdx = pages.length - 1;
+    const lastPage = pages[lastPageIdx];
+    const { width, height } = lastPage.getSize();
     
-    // Calculate the vertical scale factor to fit the 15mm footer
-    const scaleY = (height - FOOTER_HEIGHT) / height;
+    // 1. Embed the last page as a template (FormXObject) to preserve all content streams
+    const [embeddedPage] = await pdfDoc.embedPages([lastPage]);
     
-    // Compress and translate content to naturally end immediately above the footer strip
-    lastPage.scaleContent(1, scaleY);
-    lastPage.translateContent(0, FOOTER_HEIGHT);
+    // 2. Create a new replacement page with identical dimensions
+    const newPage = pdfDoc.addPage([width, height]);
     
-    // Render the premium document signature strip
+    // 3. Draw the embedded page content onto the new page, scaled vertically to leave space for the footer
+    const scaledHeight = height - FOOTER_HEIGHT;
+    newPage.drawPage(embeddedPage, {
+      x: 0,
+      y: FOOTER_HEIGHT,
+      width: width,
+      height: scaledHeight,
+    });
+    
+    // 4. Remove the original unscaled last page
+    pdfDoc.removePage(lastPageIdx);
+    
+    // 5. Render the brand footer in the newly created bottom whitespace
     const renderer = new FooterRenderer(
-      lastPage,
+      newPage,
       pdfDoc,
       orderHash,
       orderId,
