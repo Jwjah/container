@@ -182,20 +182,32 @@ async function downloadFile(url, dest) {
   });
 }
 
-// Function to trigger OS print or open preview
+// Function to trigger OS print directly to default physical printer
 function printFile(filePath) {
-  const logMsg = `🖨️  [PRINTER AGENT] Triggering print for: ${filePath}`;
+  const logMsg = `🖨️  [PRINTER AGENT] Triggering physical print for: ${filePath}`;
   console.log(logMsg);
   
   // Write to internal agent log for background verification
   fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ${logMsg}\n`);
 
   const isWindows = process.platform === 'win32';
-  const openCommand = isWindows ? 'start' : 'open';
+  let printCmd;
+  
+  if (isWindows) {
+    // Windows: Use PowerShell to print silently to default printer using the system print verb
+    printCmd = `powershell -Command "Start-Process -FilePath '${filePath}' -Verb Print -WindowStyle Hidden"`;
+  } else {
+    // macOS / Linux: Use lp command to send directly to the default printer queue
+    printCmd = `lp "${filePath}"`;
+  }
 
-  exec(`"${openCommand}" "${filePath}"`, (err) => {
+  exec(printCmd, (err) => {
     if (err) {
-      console.error('❌ Failed to execute command:', err.message);
+      console.error('❌ Failed to execute print command:', err.message);
+      fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ❌ Failed to print: ${err.message}\n`);
+    } else {
+      console.log('✅ Print job sent to default physical printer successfully.');
+      fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ✅ Print job sent to printer.\n`);
     }
   });
 }
