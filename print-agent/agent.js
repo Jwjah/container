@@ -201,7 +201,7 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
       printCmd = `powershell -Command "` +
         `$targetPrinter = (Get-CimInstance Win32_Printer | Where-Object { $_.Name -like '*${printType === 'bw' ? 'bw' : 'color'}*' -or $_.Name -like '*${printType === 'bw' ? 'mono' : 'colour'}*' -or $_.Name -like '*${printType === 'bw' ? 'gray' : 'chroma'}*' } | Select-Object -First 1).Name; ` +
         `if (-not $targetPrinter) { $targetPrinter = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name }; ` +
-        `Start-Process -FilePath '${exePath}' -ArgumentList '-print-to', \\"$targetPrinter\\", '-print-settings', \\"${settingsStr}\\", '-silent', '${filePath}' -Wait` +
+        `& '${exePath}' -print-to \\"$targetPrinter\\" -print-settings '${settingsStr}' -silent '${filePath}'` +
         `"`;
     } else {
       printCmd = `powershell -Command "` +
