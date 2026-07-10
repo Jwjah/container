@@ -218,8 +218,10 @@ function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
       `Set-PrintConfiguration -PrinterName $targetPrinter -Color $origC -DuplexingMode $origD` +
       `"`;
   } else {
-    // macOS / Linux: Use lp command with native command-line options
-    const colorOpt = printType === 'bw' ? '-o ColorModel=Gray' : '-o ColorModel=Color';
+    // macOS / Linux: Use lp command with native command-line options and robust fallbacks
+    const colorOpt = printType === 'bw' 
+      ? '-o ColorModel=Gray -o ColorModel=Monochrome -o ColorModel=BlackWhite -o ColorModel=K' 
+      : '-o ColorModel=Color';
     const duplexOpt = layout === 'double' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided';
     printCmd = `lp -n ${copies} ${colorOpt} ${duplexOpt} "${filePath}"`;
   }

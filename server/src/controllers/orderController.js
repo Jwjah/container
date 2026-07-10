@@ -588,7 +588,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr, o.print_type 
+      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr, o.print_type, o.notes 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -618,6 +618,15 @@ exports.downloadPrintPdf = async (req, res) => {
       return res.send(pdfBuffer);
     }
     
+    // Parse pages per sheet from notes format: e.g. "[Format: A4, portrait, 2 pg/sheet, Binding: none]"
+    let pagesPerSheet = 1;
+    if (file.notes && file.notes.includes('pg/sheet')) {
+      const match = file.notes.match(/(\d+)\s*pg\/sheet/);
+      if (match) {
+        pagesPerSheet = parseInt(match[1], 10);
+      }
+    }
+    
     // Modify PDF using helper
     const { modifyPdf } = require('../utils/pdfProcessor');
     let modifiedBuffer;
@@ -628,7 +637,8 @@ exports.downloadPrintPdf = async (req, res) => {
         file.id,
         file.pickup_qr,
         file.delivery_qr,
-        file.print_type
+        file.print_type,
+        pagesPerSheet
       );
     } catch (processErr) {
       console.error('PDF modifications failed, sending original:', processErr.message);
