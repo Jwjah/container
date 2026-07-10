@@ -5,7 +5,7 @@ const sharp = require('sharp');
 
 // Set to true to draw layout guide lines (physical edge: red, printable margin: green,
 // footer bottom: blue, footer top: magenta, separator line: orange)
-const DEBUG_MODE = false;
+const DEBUG_MODE = true;
 
 // Configurable Printer Profile object (in mm)
 const PrinterProfile = {
