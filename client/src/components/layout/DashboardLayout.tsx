@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { PulseDot, NotificationBadge } from '@/components/animations';
 import Logo from '@/components/ui/Logo';
 import api from '@/lib/api';
+import toast from 'react-hot-toast';
 import {
   HiOutlineHome, HiOutlineDocumentText, HiOutlineCog, HiOutlineLogout,
   HiOutlineBell, HiOutlineMenu, HiOutlineX, HiOutlineChartBar,
@@ -68,6 +69,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      const dismissed = sessionStorage.getItem('dismissed-notification-banner') === 'true';
+      if (Notification.permission === 'default' && !dismissed) {
+        setShowNotificationPrompt(true);
+      }
+    }
+  }, []);
+
+  const enableNotifications = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        setShowNotificationPrompt(false);
+        window.dispatchEvent(new Event('subscribe-push'));
+        toast.success('System notifications enabled successfully!');
+      } else if (permission === 'denied') {
+        setShowNotificationPrompt(false);
+        toast.error('Notification permission denied. Please allow them in your browser settings.');
+      }
+    } catch (err) {
+      console.error('Error enabling notifications:', err);
+    }
+  };
+
+  const dismissNotificationPrompt = () => {
+    setShowNotificationPrompt(false);
+    sessionStorage.setItem('dismissed-notification-banner', 'true');
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -351,6 +384,71 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Page content */}
         <div style={{ padding: '24px' }}>
+          <AnimatePresence>
+            {showNotificationPrompt && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '16px',
+                  padding: '16px 24px',
+                  marginBottom: '24px',
+                  background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(236, 72, 153, 0.05))',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 15px rgba(99, 102, 241, 0.1)',
+                  borderRadius: '16px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
+                  <span style={{ fontSize: '24px' }}>🔔</span>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#f8fafc' }}>
+                      Never miss a print job or update!
+                    </h4>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: '1.4' }}>
+                      Enable push notifications to get alerts when you close the app or switch tabs.
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button
+                    onClick={enableNotifications}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'linear-gradient(135deg, #3b82f6, #ec4899)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                    }}
+                  >
+                    Enable Notifications
+                  </button>
+                  <button
+                    onClick={dismissNotificationPrompt}
+                    style={{
+                      padding: '8px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#64748b',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <motion.div
             key={pathname}
             initial={{ opacity: 0, y: 10 }}

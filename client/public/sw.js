@@ -98,10 +98,10 @@ self.addEventListener('push', (event) => {
     body: data.message || data.body || 'You have a new notification',
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-96x96.png',
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200, 100, 200, 100, 200],
     tag: data.tag || 'campusprint-' + Date.now(),
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,
     data: {
       url: data.url || '/',
     },

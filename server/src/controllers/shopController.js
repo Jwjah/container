@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { sendPushToUser } = require('../services/pushService');
 
 // Simple in-memory queue for print jobs. 
 // Keys are shop_ids, values are arrays of print jobs.
@@ -30,6 +31,12 @@ exports.createShop = async (req, res) => {
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [admin.id, '🏪 New Shop Registration', `"${shop_name}" is awaiting approval`, 'system']
       );
+      await sendPushToUser(admin.id, {
+        title: '🏪 New Shop Registration',
+        message: `"${shop_name}" is awaiting approval`,
+        url: '/admin/shops',
+        tag: `shop-registration-${result.insertId}`,
+      });
     }
 
     res.status(201).json({ message: 'Shop registered. Awaiting admin approval.', shopId: result.insertId });

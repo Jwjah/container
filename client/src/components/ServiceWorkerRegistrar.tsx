@@ -76,7 +76,7 @@ export default function ServiceWorkerRegistrar() {
 
         // Subscribe to push notifications if user is logged in
         if (user && VAPID_PUBLIC_KEY) {
-          await subscribeToPush(registration);
+          await subscribeToPush(registration, false);
         }
       } catch (err) {
         console.warn('⚠️ Service Worker registration failed:', err);
@@ -84,6 +84,19 @@ export default function ServiceWorkerRegistrar() {
     };
 
     registerSW();
+
+    // Listen for manual subscription requests (gesture triggered)
+    const handleSubscribePush = async () => {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await subscribeToPush(registration, true);
+        }
+      } catch (err) {
+        console.warn('Manual push subscription failed:', err);
+      }
+    };
+    window.addEventListener('subscribe-push', handleSubscribePush);
 
     // Listen for background push notifications to trigger sound
     let channel: BroadcastChannel | null = null;
@@ -100,6 +113,7 @@ export default function ServiceWorkerRegistrar() {
     }
 
     return () => {
+      window.removeEventListener('subscribe-push', handleSubscribePush);
       if (channel) {
         channel.close();
       }
@@ -109,8 +123,14 @@ export default function ServiceWorkerRegistrar() {
   return null;
 }
 
-async function subscribeToPush(registration: ServiceWorkerRegistration) {
+async function subscribeToPush(registration: ServiceWorkerRegistration, forcePrompt: boolean = false) {
   try {
+    // Avoid requesting permission automatically on load unless it has already been granted
+    if (!forcePrompt && Notification.permission !== 'granted') {
+      console.log('🔔 Notification permission is default; skipping auto-prompt to avoid browser blocks');
+      return;
+    }
+
     // Request notification permission first to make sure we have access
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {

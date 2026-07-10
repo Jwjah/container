@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/lib/store';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -11,6 +11,34 @@ import { HiOutlineUser, HiOutlinePhone, HiOutlineMail, HiOutlineHome } from 'rea
 export default function SettingsPage() {
   const { user, loadUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [permission, setPermission] = useState<string>('default');
+  
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setPermission(Notification.permission);
+    }
+  }, []);
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      toast.error('Push notifications are not supported on this browser/device.');
+      return;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setPermission(result);
+      if (result === 'granted') {
+        window.dispatchEvent(new Event('subscribe-push'));
+        toast.success('Successfully subscribed to notifications!');
+      } else if (result === 'denied') {
+        toast.error('Notification permission denied. Enable it in browser settings.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to request permission.');
+    }
+  };
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -103,6 +131,44 @@ export default function SettingsPage() {
           {loading ? 'Saving Changes...' : 'Update Profile'}
         </TapButton>
       </form>
+
+      {/* Push Notifications Settings Card */}
+      <div className="glass-card" style={{ marginTop: 24, padding: 32 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          🔔 System Notifications
+        </h3>
+        <p style={{ color: 'var(--text-tertiary)', fontSize: 13, marginBottom: 20, lineHeight: 1.4 }}>
+          Receive instant push notifications for your orders, delivery status, and wallet updates even when the application is closed.
+        </p>
+
+        {permission === 'granted' ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#22c55e', fontSize: 14, fontWeight: 600 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+            Push notifications are active and registered.
+          </div>
+        ) : permission === 'denied' ? (
+          <div style={{ color: '#ef4444', fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>
+            ⚠️ Notification permission is blocked in your browser settings. Please reset the site permissions in your browser address bar to enable notifications.
+          </div>
+        ) : (
+          <TapButton
+            className="btn btn-outline"
+            onClick={requestNotificationPermission}
+            type="button"
+            style={{
+              padding: '10px 16px',
+              borderColor: 'var(--primary)',
+              color: 'var(--primary)',
+              background: 'transparent',
+              fontSize: 13,
+              fontWeight: 600,
+              width: 'fit-content',
+            }}
+          >
+            Enable Push Notifications
+          </TapButton>
+        )}
+      </div>
     </div>
   );
 }

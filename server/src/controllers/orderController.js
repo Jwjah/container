@@ -272,6 +272,23 @@ exports.updateOrderStatus = async (req, res) => {
     const setClause = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     await db.execute(`UPDATE orders SET ${setClause} WHERE id = ?`, [...Object.values(updates), req.params.id]);
 
+    if (status === 'ready' && order.delivery_type === 'hostel') {
+      // Notify all agents about the new delivery gig
+      const [agents] = await db.execute("SELECT id FROM users WHERE role = 'agent'");
+      for (const agent of agents) {
+        await db.execute(
+          'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+          [agent.id, '🆕 New Delivery Gig Available', `Order #${order.order_hash.substring(0, 8).toUpperCase()} is ready for delivery.`, 'delivery']
+        );
+        await sendPushToUser(agent.id, {
+          title: '🆕 New Delivery Gig Available',
+          message: `Order #${order.order_hash.substring(0, 8).toUpperCase()} is ready for delivery.`,
+          url: '/agent/radar',
+          tag: `gig-${req.params.id}`,
+        });
+      }
+    }
+
     // Notify student
     const statusMessages = {
       confirmed: '✅ Order confirmed by shop',
@@ -380,6 +397,12 @@ exports.verifyDeliveryByStudent = async (req, res) => {
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [orders[0].agent_id, '✅ Delivery Confirmed!', `Student confirmed delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}. ₹${earning.toFixed(0)} credited.`, 'wallet']
       );
+      await sendPushToUser(orders[0].agent_id, {
+        title: '✅ Delivery Confirmed!',
+        message: `Student confirmed delivery #${orders[0].order_hash.substring(0, 8).toUpperCase()}. ₹${earning.toFixed(0)} credited.`,
+        url: '/agent/earnings',
+        tag: `delivery-${id}`,
+      });
     }
 
     // Mark order as delivered via internal logic
@@ -522,6 +545,12 @@ exports.changeFulfillment = async (req, res) => {
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
       [order.student_id, 'Delivery Method Changed', `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${updatedPrice.toFixed(0)}`, 'order']
     );
+    await sendPushToUser(order.student_id, {
+      title: 'Delivery Method Changed',
+      message: `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${updatedPrice.toFixed(0)}`,
+      url: '/student/orders',
+      tag: `order-${id}`,
+    });
 
     // Notify shop
     const [shops] = await db.execute('SELECT user_id FROM shops WHERE id = ?', [order.shop_id]);
