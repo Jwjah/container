@@ -2,10 +2,11 @@ const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const QRCode = require('qrcode');
 
 // Set to true to draw layout guide lines (physical edge: red, printable margin: green,
 // footer bottom: blue, footer top: magenta, separator line: orange)
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 
 // Configurable Printer Profile object (in mm)
 const PrinterProfile = {
@@ -29,7 +30,7 @@ const FOOTER_TOP_Y = FOOTER_BOTTOM_Y + FOOTER_HEIGHT;
 
 // Original footer dimensions (100% scale, unchanged)
 const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm
-const QR_SIZE = 12 * MM_TO_PT;             // 12 mm
+const QR_SIZE = 15 * MM_TO_PT;             // 15 mm (Optimized printed QR size)
 const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm
 const SEPARATOR_THICKNESS = 0.3;           // 0.3 pt
 
@@ -172,15 +173,51 @@ class FooterRenderer {
     const shortId = this.orderHash ? this.orderHash.substring(0, 8).toUpperCase() : 'N/A';
 
     if (this.pickupQr) {
+      // Reconstruct payload and generate optimized high-res black & white QR for print
+      const pickupPayload = JSON.stringify({
+        type: 'pickup',
+        orderId: Number(this.orderId),
+        hash: this.orderHash,
+        action: 'verify_pickup'
+      });
+      
+      const qrBytes = await QRCode.toBuffer(pickupPayload, {
+        errorCorrectionLevel: 'L',
+        margin: 4,
+        width: 512,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
       qrsToEmbed.push({
-        base64: this.pickupQr,
+        bytes: qrBytes,
         label1: this.deliveryQr ? 'Order' : 'Pickup',
         label2: `CP${shortId}`,
       });
     }
     if (this.deliveryQr) {
+      // Reconstruct payload and generate optimized high-res black & white QR for print
+      const deliveryPayload = JSON.stringify({
+        type: 'delivery',
+        orderId: Number(this.orderId),
+        hash: this.orderHash,
+        action: 'verify_delivery'
+      });
+      
+      const qrBytes = await QRCode.toBuffer(deliveryPayload, {
+        errorCorrectionLevel: 'L',
+        margin: 4,
+        width: 512,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
       qrsToEmbed.push({
-        base64: this.deliveryQr,
+        bytes: qrBytes,
         label1: 'Delivery',
         label2: 'Track',
       });
@@ -195,11 +232,7 @@ class FooterRenderer {
       const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
       const qrX = rightCenterX - QR_SIZE / 2;
       
-      let qrBytes = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      if (isBw) {
-        qrBytes = await sharp(qrBytes).grayscale().toBuffer();
-      }
-      const qrImage = await this.pdfDoc.embedPng(qrBytes);
+      const qrImage = await this.pdfDoc.embedPng(qrsToEmbed[0].bytes);
       
       this.page.drawImage(qrImage, {
         x: qrX,
@@ -235,11 +268,7 @@ class FooterRenderer {
       const qrX2 = qrX1 + QR_SIZE + gap;
       
       // QR 1
-      let qrBytes1 = Buffer.from(qrsToEmbed[0].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      if (isBw) {
-        qrBytes1 = await sharp(qrBytes1).grayscale().toBuffer();
-      }
-      const qrImage1 = await this.pdfDoc.embedPng(qrBytes1);
+      const qrImage1 = await this.pdfDoc.embedPng(qrsToEmbed[0].bytes);
       this.page.drawImage(qrImage1, {
         x: qrX1,
         y: qrY,
@@ -266,11 +295,7 @@ class FooterRenderer {
       });
 
       // QR 2
-      let qrBytes2 = Buffer.from(qrsToEmbed[1].base64.replace(/^data:image\/png;base64,/, ''), 'base64');
-      if (isBw) {
-        qrBytes2 = await sharp(qrBytes2).grayscale().toBuffer();
-      }
-      const qrImage2 = await this.pdfDoc.embedPng(qrBytes2);
+      const qrImage2 = await this.pdfDoc.embedPng(qrsToEmbed[1].bytes);
       this.page.drawImage(qrImage2, {
         x: qrX2,
         y: qrY,
@@ -375,44 +400,75 @@ class FooterRenderer {
   }
 }
 
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
+
 /**
- * Modifies the last page of the PDF using embedded FormXObject scaling to avoid content clipping.
- * All positions and scaling are derived dynamically from the printer profile configuration.
+ * Modifies the PDF, converting all pages to exactly A4 size, and adds a branded brand footer
+ * on the last page. All positions and scaling are derived dynamically from the printer profile.
  */
 async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw') {
   try {
-    const pdfDoc = await PDFDocument.load(pdfBuffer);
-    const pages = pdfDoc.getPages();
+    const srcDoc = await PDFDocument.load(pdfBuffer);
+    const srcPages = srcDoc.getPages();
     
-    if (pages.length === 0) {
+    if (srcPages.length === 0) {
       throw new Error('PDF has no pages');
     }
     
-    const lastPageIdx = pages.length - 1;
-    const lastPage = pages[lastPageIdx];
-    const { width, height } = lastPage.getSize();
+    const pdfDoc = await PDFDocument.create();
     
-    // 1. Embed the last page as a template (FormXObject) to preserve all content streams
-    const [embeddedPage] = await pdfDoc.embedPages([lastPage]);
+    for (let i = 0; i < srcPages.length; i++) {
+      const page = srcPages[i];
+      const { width, height } = page.getSize();
+      
+      const originalWidth = width;
+      const originalHeight = height;
+      
+      // Detected paper type
+      const isLetter = Math.abs(originalWidth - 612) < 5 && Math.abs(originalHeight - 792) < 5;
+      const isA4 = Math.abs(originalWidth - A4_WIDTH) < 5 && Math.abs(originalHeight - A4_HEIGHT) < 5;
+      const detectedPaper = isA4 ? 'A4' : (isLetter ? 'Letter' : 'Custom');
+      
+      const [embeddedPage] = await pdfDoc.embedPages([page]);
+      const newPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+      
+      if (i === srcPages.length - 1) {
+        // Last page: Draw scaled vertically to reserve space for the footer
+        const scaledHeight = A4_HEIGHT - RESERVED_SPACE;
+        newPage.drawPage(embeddedPage, {
+          x: 0,
+          y: RESERVED_SPACE,
+          width: A4_WIDTH,
+          height: scaledHeight,
+        });
+        
+        console.log(`[PDF PROCESSOR LOG] Page Conversion - Page #${i + 1} (Last Page):`);
+        console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
+        console.log(`  - New Page size: ${A4_WIDTH} x ${A4_HEIGHT} pt (A4)`);
+        console.log(`  - Footer Y Coordinate (Bottom Y): ${FOOTER_BOTTOM_Y.toFixed(2)} pt (${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm)`);
+        console.log(`  - Remaining bottom whitespace: ${(FOOTER_BOTTOM_Y / MM_TO_PT).toFixed(2)} mm`);
+      } else {
+        // Non-last pages: Scale exactly to fit full A4
+        newPage.drawPage(embeddedPage, {
+          x: 0,
+          y: 0,
+          width: A4_WIDTH,
+          height: A4_HEIGHT,
+        });
+        
+        console.log(`[PDF PROCESSOR LOG] Page Conversion - Page #${i + 1}:`);
+        console.log(`  - Original Page size: ${originalWidth.toFixed(2)} x ${originalHeight.toFixed(2)} pt (${detectedPaper})`);
+        console.log(`  - New Page size: ${A4_WIDTH} x ${A4_HEIGHT} pt (A4)`);
+      }
+    }
     
-    // 2. Create a new replacement page with identical dimensions
-    const newPage = pdfDoc.addPage([width, height]);
+    // Render the brand footer on the last A4 page
+    const pages = pdfDoc.getPages();
+    const lastPage = pages[pages.length - 1];
     
-    // 3. Draw the embedded page content onto the new page, scaled vertically to leave space for the footer
-    const scaledHeight = height - RESERVED_SPACE;
-    newPage.drawPage(embeddedPage, {
-      x: 0,
-      y: RESERVED_SPACE,
-      width: width,
-      height: scaledHeight,
-    });
-    
-    // 4. Remove the original unscaled last page
-    pdfDoc.removePage(lastPageIdx);
-    
-    // 5. Render the brand footer in the newly created bottom whitespace
     const renderer = new FooterRenderer(
-      newPage,
+      lastPage,
       pdfDoc,
       orderHash,
       orderId,

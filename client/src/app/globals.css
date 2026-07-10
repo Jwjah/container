@@ -583,3 +583,16 @@ select.input {
   }
 }
 
+/* Force A4 physical printing dimensions */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  html, body {
+    width: 210mm;
+    height: 297mm;
+  }
+}
+
