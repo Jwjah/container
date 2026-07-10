@@ -280,7 +280,7 @@ async function ensureSumatraPDF() {
   if (fs.existsSync(exePath)) return true;
 
   console.log('📦 Windows detected: Downloading silent physical printing helper (SumatraPDF)...');
-  const url = 'https://www.sumatrapdfreader.org/dl/SumatraPDF-3.5.2-32.exe';
+  const url = 'https://www.sumatrapdfreader.org/dl/rel/3.5.2/SumatraPDF-3.5.2-install.exe';
   
   try {
     const response = await axios({
