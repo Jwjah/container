@@ -148,20 +148,41 @@ export default function AdminOrdersPage() {
                           <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{file.pages} pages</div>
                         </div>
                       </div>
-                      <button 
-                        className="btn btn-secondary btn-sm" 
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          try {
-                            const { data } = await api.get(`/orders/files/${file.id}/download`);
-                            window.open(data.url, '_blank');
-                          } catch (err) {
-                            toast.error('Failed to download file');
-                          }
-                        }}
-                      >
-                        Download
-                      </button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const { data } = await api.get(`/orders/files/${file.id}/download`);
+                              window.open(data.url, '_blank');
+                            } catch (err) {
+                              toast.error('Failed to download file');
+                            }
+                          }}
+                        >
+                          Download
+                        </button>
+                        {file.name.toLowerCase().endsWith('.pdf') && (
+                          <button 
+                            className="btn btn-outline btn-sm" 
+                            style={{ padding: '4px 10px', fontSize: 11, borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const token = localStorage.getItem('token') || '';
+                                const apiBase = api.defaults.baseURL || '';
+                                const printPdfUrl = `${apiBase}/orders/files/${file.id}/print-pdf?token=${token}`;
+                                window.open(printPdfUrl, '_blank');
+                              } catch (err) {
+                                toast.error('Failed to open print PDF');
+                              }
+                            }}
+                          >
+                            Print PDF
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -146,20 +146,40 @@ export default function QueuePage() {
                                 <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{file.pages} pages</div>
                               </div>
                             </div>
-                            <button 
-                              className="btn btn-secondary btn-sm" 
-                              style={{ padding: '4px 10px', fontSize: 11 }}
-                              onClick={async () => {
-                                try {
-                                  const { data } = await api.get(`/orders/files/${file.id}/download`);
-                                  window.open(data.url, '_blank');
-                                } catch (err) {
-                                  toast.error('Failed to open file');
-                                }
-                              }}
-                            >
-                              View / Download
-                            </button>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button 
+                                className="btn btn-secondary btn-sm" 
+                                style={{ padding: '4px 10px', fontSize: 11 }}
+                                onClick={async () => {
+                                  try {
+                                    const { data } = await api.get(`/orders/files/${file.id}/download`);
+                                    window.open(data.url, '_blank');
+                                  } catch (err) {
+                                    toast.error('Failed to open file');
+                                  }
+                                }}
+                              >
+                                View Original
+                              </button>
+                              {file.name.toLowerCase().endsWith('.pdf') && (
+                                <button 
+                                  className="btn btn-outline btn-sm" 
+                                  style={{ padding: '4px 10px', fontSize: 11, borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                                  onClick={async () => {
+                                    try {
+                                      const token = localStorage.getItem('token') || '';
+                                      const apiBase = api.defaults.baseURL || '';
+                                      const printPdfUrl = `${apiBase}/orders/files/${file.id}/print-pdf?token=${token}`;
+                                      window.open(printPdfUrl, '_blank');
+                                    } catch (err) {
+                                      toast.error('Failed to open print PDF');
+                                    }
+                                  }}
+                                >
+                                  View Print PDF (with QR)
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
