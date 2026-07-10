@@ -182,7 +182,11 @@ exports.triggerPrint = async (req, res) => {
     }
 
     const token = req.headers.authorization?.split(' ')[1] || req.cookies?.token || '';
-    const baseUrl = (process.env.API_URL || 'http://localhost:5050/api');
+    
+    // Resolve base URL dynamically from request to support multi-environment without config
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const baseUrl = `${protocol}://${host}/api`;
 
     // Add each file to the queue
     for (const file of files) {

@@ -8,6 +8,9 @@ require('dotenv').config();
 
 const app = express();
 
+// Trust reverse proxy headers (for Render, Vercel, etc.)
+app.set('trust proxy', true);
+
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 const clientUrl = (process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
