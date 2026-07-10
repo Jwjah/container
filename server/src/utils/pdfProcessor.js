@@ -3,33 +3,46 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 
-// Configurable Printer Profile constants (in mm)
-const printerBottomMarginMM = 3.0;      // Physical non-printable area at the bottom
-const footerHeightMM = 10.0;           // Height of the CampusPrint brand footer box
-const footerBottomPaddingMM = 1.0;     // Padding below the footer box
-const separatorGapMM = 2.0;            // Gap between the separator line and document content
+// Set to true to draw layout guide lines (physical edge: red, printable margin: green,
+// footer bottom: blue, footer top: magenta, separator line: orange)
+const DEBUG_MODE = false;
+
+// Configurable Printer Profile object (in mm)
+const PrinterProfile = {
+  printableBottomMarginMM: 3,
+  footerHeightMM: 10,
+  footerBottomPaddingMM: 1,
+  separatorGapMM: 2,
+};
 
 const MM_TO_PT = 2.83465; // 1 mm = 2.83465 PDF points
 
-// Calculated physical layout points
-const PRINTER_BOTTOM_MARGIN = printerBottomMarginMM * MM_TO_PT;
-const FOOTER_BOTTOM_PADDING = footerBottomPaddingMM * MM_TO_PT;
-const FOOTER_HEIGHT = footerHeightMM * MM_TO_PT;
-const SEPARATOR_GAP = separatorGapMM * MM_TO_PT;
+// Calculated physical layout points derived from PrinterProfile
+const PRINTER_BOTTOM_MARGIN = PrinterProfile.printableBottomMarginMM * MM_TO_PT;
+const FOOTER_BOTTOM_PADDING = PrinterProfile.footerBottomPaddingMM * MM_TO_PT;
+const FOOTER_HEIGHT = PrinterProfile.footerHeightMM * MM_TO_PT;
+const SEPARATOR_GAP = PrinterProfile.separatorGapMM * MM_TO_PT;
 
-// Compute footer position dynamically
+// Compute footer base coordinate (ends exactly printable margin + padding above physical page bottom)
 const FOOTER_BOTTOM_Y = PRINTER_BOTTOM_MARGIN + FOOTER_BOTTOM_PADDING;
 const FOOTER_TOP_Y = FOOTER_BOTTOM_Y + FOOTER_HEIGHT;
-const SEPARATOR_Y = FOOTER_TOP_Y;
 
-// Total reserved space at the bottom to compress/scale the last page content
+// Original footer dimensions (100% scale, unchanged)
+const LOGO_HEIGHT = 10 * MM_TO_PT;         // 10 mm
+const QR_SIZE = 12 * MM_TO_PT;             // 12 mm
+const SIDE_PADDING = 8 * MM_TO_PT;         // 8 mm
+const SEPARATOR_THICKNESS = 0.3;           // 0.3 pt
+
+// Align elements exactly as they were in the earlier version, translated by FOOTER_BOTTOM_Y
+const qrY = FOOTER_BOTTOM_Y + 11.5;
+const cap1Y = FOOTER_BOTTOM_Y + 6.0;
+const cap2Y = FOOTER_BOTTOM_Y + 1.5;
+
+// The separator line is drawn at the top of the elements or background box
+const SEPARATOR_Y = Math.max(FOOTER_TOP_Y, qrY + QR_SIZE);
+
+// Total reserved space to scale and compress the original PDF page content
 const RESERVED_SPACE = SEPARATOR_Y + SEPARATOR_GAP;
-
-// Element dimensions scaled down to fit cleanly inside the 10mm footer
-const QR_SIZE = 7.5 * MM_TO_PT;             
-const LOGO_HEIGHT = 7.5 * MM_TO_PT;         
-const SIDE_PADDING = 8 * MM_TO_PT;         
-const SEPARATOR_THICKNESS = 0.3;           
 
 class FooterRenderer {
   constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw') {
@@ -55,12 +68,12 @@ class FooterRenderer {
   }
 
   drawBackground() {
-    // Draw minimalist clean white footer background
+    // Draw minimalist clean white footer background covering up to the separator
     this.page.drawRectangle({
       x: 0,
-      y: FOOTER_BOTTOM_Y,
+      y: 0,
       width: this.width,
-      height: FOOTER_HEIGHT,
+      height: SEPARATOR_Y,
       color: rgb(1, 1, 1),
     });
   }
@@ -68,7 +81,7 @@ class FooterRenderer {
   drawSeparator() {
     const isBw = this.printType === 'bw';
     const separatorColor = isBw ? rgb(0.9, 0.9, 0.9) : rgb(0.91, 0.91, 0.93);
-    // Draw very light, thin separator line
+    // Draw very light, thin separator line at SEPARATOR_Y
     this.page.drawLine({
       start: { x: SIDE_PADDING, y: SEPARATOR_Y },
       end: { x: this.width - SIDE_PADDING, y: SEPARATOR_Y },
@@ -79,9 +92,9 @@ class FooterRenderer {
 
   async drawLeftColumn() {
     const logoX = SIDE_PADDING;
-    const logoY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - LOGO_HEIGHT) / 2;
+    const logoY = FOOTER_BOTTOM_Y + 7.08;
     
-    // 1. Draw Logo (Grayscale converted dynamically via sharp if B&W)
+    // 1. Draw Logo
     try {
       const logoPath = path.join(__dirname, '../assets/logo.jpg');
       if (fs.existsSync(logoPath)) {
@@ -108,17 +121,17 @@ class FooterRenderer {
     const line2 = 'Printing made effortless.';
     const line3 = 'campusprint.in';
     
-    const size1 = 5.5;
-    const size2 = 4.0;
-    const size3 = 3.5;
+    const size1 = 6.5;
+    const size2 = 5.0;
+    const size3 = 4.5;
     
-    // Vertical placement centered inside the footer box
-    const textBlockHeight = size1 + size2 + size3 + 3.0;
-    const startY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - textBlockHeight) / 2;
+    // Vertical placement centered (matches earlier version exactly, shifted by FOOTER_BOTTOM_Y)
+    const textBlockHeight = size1 + size2 + size3 + 4.0;
+    const startY = FOOTER_BOTTOM_Y + 11.26;
     
     const y3 = startY;
-    const y2 = y3 + size3 + 1.5;
-    const y1 = y2 + size2 + 1.5;
+    const y2 = y3 + size3 + 2.0;
+    const y1 = y2 + size2 + 2.0;
 
     const isBw = this.printType === 'bw';
     const colorLine1 = isBw ? rgb(0.1, 0.1, 0.1) : rgb(0.1, 0.1, 0.15);
@@ -151,7 +164,6 @@ class FooterRenderer {
   }
 
   async drawRightColumn() {
-    // Dynamic QR Column range: [65% of width, width - SIDE_PADDING]
     const rightAreaMinX = this.width * 0.65;
     const rightAreaMaxX = this.width - SIDE_PADDING;
     const rightAreaWidth = rightAreaMaxX - rightAreaMinX;
@@ -174,15 +186,10 @@ class FooterRenderer {
       });
     }
     
-    // Layout parameters centered inside footer height
-    const qrY = FOOTER_BOTTOM_Y + (FOOTER_HEIGHT - QR_SIZE) / 2;
-    const cap1Y = FOOTER_BOTTOM_Y + 1.2 * MM_TO_PT;
-    const cap2Y = FOOTER_BOTTOM_Y + 0.3 * MM_TO_PT;
-    const captionSize = 3.0;
-    
+    const captionSize = 4.0;
     const isBw = this.printType === 'bw';
     const captionColor = isBw ? rgb(0.55, 0.55, 0.55) : rgb(0.55, 0.55, 0.6);
-
+    
     if (qrsToEmbed.length === 1) {
       // Single QR layout (Centered in right column)
       const rightCenterX = (rightAreaMinX + rightAreaMaxX) / 2;
@@ -297,7 +304,7 @@ class FooterRenderer {
     const vWidth = this.font.widthOfTextAtSize(versionText, vSize);
     
     const vx = this.width - SIDE_PADDING - vWidth;
-    const vy = FOOTER_BOTTOM_Y + 0.5 * MM_TO_PT;
+    const vy = FOOTER_BOTTOM_Y + 1.5;
 
     const isBw = this.printType === 'bw';
     const versionColor = isBw ? rgb(0.8, 0.8, 0.8) : rgb(0.8, 0.8, 0.82);
@@ -311,12 +318,60 @@ class FooterRenderer {
     });
   }
 
+  drawDebugGuides() {
+    // 1. Physical page edges (Red border)
+    this.page.drawRectangle({
+      x: 2,
+      y: 2,
+      width: this.width - 4,
+      height: this.height - 4,
+      borderColor: rgb(1, 0, 0),
+      borderWidth: 1,
+    });
+    
+    // 2. Printable bottom margin (Green)
+    this.page.drawLine({
+      start: { x: 0, y: PRINTER_BOTTOM_MARGIN },
+      end: { x: this.width, y: PRINTER_BOTTOM_MARGIN },
+      thickness: 1.0,
+      color: rgb(0, 1, 0),
+    });
+    
+    // 3. Footer bottom padding limit (Blue)
+    this.page.drawLine({
+      start: { x: 0, y: FOOTER_BOTTOM_Y },
+      end: { x: this.width, y: FOOTER_BOTTOM_Y },
+      thickness: 1.0,
+      color: rgb(0, 0, 1),
+    });
+    
+    // 4. Footer top config limit (Magenta)
+    this.page.drawLine({
+      start: { x: 0, y: FOOTER_TOP_Y },
+      end: { x: this.width, y: FOOTER_TOP_Y },
+      thickness: 1.0,
+      color: rgb(1, 0, 1),
+    });
+    
+    // 5. Separator line (Orange)
+    this.page.drawLine({
+      start: { x: 0, y: SEPARATOR_Y },
+      end: { x: this.width, y: SEPARATOR_Y },
+      thickness: 1.0,
+      color: rgb(1, 0.5, 0),
+    });
+  }
+
   async render() {
     this.drawBackground();
     this.drawSeparator();
     await this.drawLeftColumn();
     await this.drawRightColumn();
     this.drawVersioning();
+    
+    if (DEBUG_MODE) {
+      this.drawDebugGuides();
+    }
   }
 }
 
