@@ -203,8 +203,17 @@ function printFile(filePath) {
 
   exec(printCmd, (err) => {
     if (err) {
-      console.error('❌ Failed to execute print command:', err.message);
-      fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ❌ Failed to print: ${err.message}\n`);
+      console.warn('❌ Direct physical printing failed:', err.message.trim());
+      fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ❌ Direct print failed: ${err.message}\n`);
+      
+      // Fallback: Open the file in the default OS viewer (browser or Preview) so they can print it manually
+      console.log('📂 Opening file in default PDF viewer as fallback...');
+      const openCommand = isWindows ? 'start ""' : 'open';
+      exec(`${openCommand} "${filePath}"`, (openErr) => {
+        if (openErr) {
+          console.error('❌ Fallback failed to open file:', openErr.message);
+        }
+      });
     } else {
       console.log('✅ Print job sent to default physical printer successfully.');
       fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ✅ Print job sent to printer.\n`);
