@@ -194,8 +194,14 @@ function printFile(filePath) {
   let printCmd;
 
   if (isWindows) {
-    // Windows: Use PowerShell to print silently to default printer using the system print verb
-    printCmd = `powershell -Command "Start-Process -FilePath '${filePath}' -Verb Print -WindowStyle Hidden"`;
+    // Windows: Use PDFtoPrinter.exe if present for pure silent printing
+    const exePath = path.join(__dirname, 'PDFtoPrinter.exe');
+    if (fs.existsSync(exePath)) {
+      printCmd = `"${exePath}" "${filePath}"`;
+    } else {
+      // Otherwise use PowerShell to launch default print verb hidden, wait 5 seconds to spool, and force close Adobe Acrobat
+      printCmd = `powershell -Command "$val = Start-Process -FilePath '${filePath}' -Verb Print -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }"`;
+    }
   } else {
     // macOS / Linux: Use lp command to send directly to the default printer queue
     printCmd = `lp "${filePath}"`;
@@ -254,9 +260,43 @@ async function pollForJobs() {
   setTimeout(pollForJobs, POLL_INTERVAL_MS);
 }
 
-function startPolling() {
+// Ensure PDFtoPrinter.exe is downloaded on Windows for silent printing
+async function ensurePDFtoPrinter() {
+  const exePath = path.join(__dirname, 'PDFtoPrinter.exe');
+  if (fs.existsSync(exePath)) return true;
+
+  console.log('📦 Windows detected: Downloading silent physical printing helper (PDFtoPrinter)...');
+  const url = 'https://github.com/svishnevsky/PDFtoPrinter/raw/master/PDFtoPrinter.exe';
+  
+  try {
+    const response = await axios({
+      url,
+      method: 'GET',
+      responseType: 'stream'
+    });
+    
+    await new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(exePath);
+      response.data.pipe(writer);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+    console.log('✅ Printing helper successfully downloaded!');
+    return true;
+  } catch (err) {
+    console.error('❌ Failed to download printing helper:', err.message);
+    return false;
+  }
+}
+
+async function startPolling() {
   console.log('\n🚀 CampusPrint Local Agent Started!');
   console.log(`📡 Listening for print jobs for Shop ID: ${SHOP_ID}...`);
+  
+  if (process.platform === 'win32') {
+    await ensurePDFtoPrinter();
+  }
+  
   pollForJobs();
 }
 
