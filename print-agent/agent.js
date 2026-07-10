@@ -182,9 +182,9 @@ async function downloadFile(url, dest) {
   });
 }
 
-// Function to trigger OS print directly to default physical printer
-function printFile(filePath) {
-  const logMsg = `🖨️  [PRINTER AGENT] Triggering physical print for: ${filePath}`;
+// Function to trigger OS print directly to default physical printer with options
+function printFile(filePath, copies = 1, printType = 'bw', layout = 'single') {
+  const logMsg = `🖨️  [PRINTER AGENT] Triggering print (Copies: ${copies}, Type: ${printType}, Layout: ${layout}) for: ${filePath}`;
   console.log(logMsg);
 
   // Write to internal agent log for background verification
@@ -194,17 +194,33 @@ function printFile(filePath) {
   let printCmd;
 
   if (isWindows) {
-    // Windows: Use PDFtoPrinter.exe if present for pure silent printing
+    // Windows: Use Set-PrintConfiguration in PowerShell to configure user print properties temporarily
+    const colorVal = printType === 'color' ? '$true' : '$false';
+    const duplexVal = layout === 'double' ? 'TwoSidedLongEdge' : 'OneSided';
     const exePath = path.join(__dirname, 'PDFtoPrinter.exe');
-    if (fs.existsSync(exePath)) {
-      printCmd = `"${exePath}" "${filePath}"`;
-    } else {
-      // Otherwise use PowerShell to launch default print verb hidden, wait 5 seconds to spool, and force close Adobe Acrobat
-      printCmd = `powershell -Command "$val = Start-Process -FilePath '${filePath}' -Verb Print -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }"`;
+
+    let printActionScript = '';
+    for (let i = 0; i < copies; i++) {
+      if (fs.existsSync(exePath)) {
+        printActionScript += `& '${exePath}' '${filePath}'; Start-Sleep -Seconds 1; `;
+      } else {
+        printActionScript += `$val = Start-Process -FilePath '${filePath}' -Verb Print -PassThru -WindowStyle Hidden; Start-Sleep -Seconds 5; If ($val) { Stop-Process -Id $val.Id -Force }; `;
+      }
     }
+
+    printCmd = `powershell -Command "` +
+      `$p = (Get-CimInstance Win32_Printer -Filter 'Default = true').Name; ` +
+      `$cfg = Get-PrintConfiguration -PrinterName $p; ` +
+      `$origC = $cfg.Color; $origD = $cfg.DuplexingMode; ` +
+      `Set-PrintConfiguration -PrinterName $p -Color ${colorVal} -DuplexingMode ${duplexVal}; ` +
+      printActionScript +
+      `Set-PrintConfiguration -PrinterName $p -Color $origC -DuplexingMode $origD` +
+      `"`;
   } else {
-    // macOS / Linux: Use lp command to send directly to the default printer queue
-    printCmd = `lp "${filePath}"`;
+    // macOS / Linux: Use lp command with native command-line options
+    const colorOpt = printType === 'bw' ? '-o ColorModel=Gray' : '-o ColorModel=Color';
+    const duplexOpt = layout === 'double' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided';
+    printCmd = `lp -n ${copies} ${colorOpt} ${duplexOpt} "${filePath}"`;
   }
 
   exec(printCmd, (err) => {
@@ -212,7 +228,7 @@ function printFile(filePath) {
       console.warn('❌ Direct physical printing failed:', err.message.trim());
       fs.appendFileSync(path.join(__dirname, 'agent.log'), `${new Date().toISOString()} - ❌ Direct print failed: ${err.message}\n`);
 
-      // Fallback: Open the file in the default OS viewer (browser or Preview) so they can print it manually
+      // Fallback: Open the file in the default OS viewer so they can print manually
       console.log('📂 Opening file in default PDF viewer as fallback...');
       const openCommand = isWindows ? 'start ""' : 'open';
       exec(`${openCommand} "${filePath}"`, (openErr) => {
@@ -247,7 +263,7 @@ async function pollForJobs() {
       await downloadFile(job.fileUrl, filePath);
       console.log(`💾 Saved to local disk: ${filePath}`);
 
-      printFile(filePath);
+      printFile(filePath, job.copies, job.printType, job.layout);
     }
   } catch (error) {
     if (error.response && error.response.status === 403) {

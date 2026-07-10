@@ -171,6 +171,13 @@ exports.triggerPrint = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    // Get order details for print options
+    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!orders.length) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = orders[0];
+
     // Get order files
     const [files] = await db.execute('SELECT * FROM order_files WHERE order_id = ?', [orderId]);
     if (!files.length) {
@@ -188,13 +195,16 @@ exports.triggerPrint = async (req, res) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
     const baseUrl = `${protocol}://${host}/api`;
 
-    // Add each file to the queue
+    // Add each file to the queue with dynamic print settings
     for (const file of files) {
       printQueue[shopId].push({
         orderId,
         fileId: file.id,
         fileName: file.original_name,
         fileUrl: `${baseUrl}/orders/files/${file.id}/print-pdf?token=${token}`,
+        copies: order.copies || 1,
+        printType: order.print_type || 'bw',
+        layout: order.layout || 'single',
       });
     }
 
