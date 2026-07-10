@@ -232,7 +232,7 @@ export default function QueuePage() {
             PFM supports direct, zero-click printing from the cloud to your local desktop printer. 
           </p>
           <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid var(--border)', fontSize: 13 }}>
-            <div style={{ fontWeight: 600, color: 'var(--primary-light)', marginBottom: 8 }}>⚡ 3-Step Setup:</div>
+            <div style={{ fontWeight: 600, color: 'var(--primary-light)', marginBottom: 8 }}>⚡ Zero-Config Setup:</div>
             <ol style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-tertiary)' }}>
               <li>
                 <span 
@@ -248,15 +248,14 @@ export default function QueuePage() {
                   }}
                   style={{ color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
                 >
-                  Download the lightweight PFM Print Agent ZIP
-                </span> and extract the folder to your laptop.
+                  Download your pre-configured Print Agent ZIP
+                </span> and extract the folder to your computer.
               </li>
-              <li>Double-click the <code>start-agent.command</code> (Mac) or <code>start-agent.bat</code> (Windows) file.</li>
-              <li>Log in with your shop account credentials.</li>
+              <li>Double-click the <code>start-agent.bat</code> (Windows) or <code>start-agent.command</code> (Mac) file.</li>
             </ol>
           </div>
           <p style={{ fontSize: 12, color: 'var(--success)', marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-            🟢 <strong>Note:</strong> The agent automatically registers itself to run silently in the background when your computer boots up. You only have to log in once!
+            🟢 <strong>Note:</strong> The agent starts polling and registers itself to run automatically. No login, URLs, or setup credentials are required!
           </p>
         </div>
       )}

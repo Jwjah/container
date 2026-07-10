@@ -240,15 +240,56 @@ exports.pollPrintJobs = async (req, res) => {
   }
 };
 
-// GET /api/shops/download-agent — Download print-agent.zip
+// GET /api/shops/download-agent — Download pre-configured print-agent.zip
 exports.downloadPrintAgent = async (req, res) => {
   try {
+    const token = req.query.token || '';
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication token is required to download agent' });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+
+    // Retrieve shop details for this user
+    const [shops] = await db.execute('SELECT * FROM shops WHERE user_id = ?', [decoded.id]);
+    if (!shops.length) {
+      return res.status(404).json({ error: 'Shop profile not found for this user account' });
+    }
+    const shop = shops[0];
+
     const path = require('path');
+    const AdmZip = require('adm-zip');
+    
     const filePath = path.join(__dirname, '../assets/print-agent.zip');
-    res.download(filePath, 'print-agent.zip');
+    const zip = new AdmZip(filePath);
+
+    // Resolve API URL dynamically based on host header
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const apiBaseUrl = `${protocol}://${host}/api`;
+
+    // Construct pre-configured config.json content
+    const configContent = JSON.stringify({
+      API_BASE_URL: apiBaseUrl,
+      SHOP_ID: String(shop.id),
+      AUTH_TOKEN: token
+    }, null, 2);
+
+    // Inject config.json inside print-agent/ folder in the ZIP
+    zip.addFile('print-agent/config.json', Buffer.from(configContent, 'utf8'));
+
+    const zipBuffer = zip.toBuffer();
+    
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': 'attachment; filename="print-agent.zip"',
+      'Content-Length': zipBuffer.length
+    });
+    res.send(zipBuffer);
   } catch (err) {
     console.error('Download print agent error:', err);
-    res.status(500).json({ error: 'Failed to download print agent' });
+    res.status(500).json({ error: 'Failed to download print agent. Invalid token or server error.' });
   }
 };
 
