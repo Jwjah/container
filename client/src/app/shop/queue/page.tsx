@@ -234,7 +234,23 @@ export default function QueuePage() {
           <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid var(--border)', fontSize: 13 }}>
             <div style={{ fontWeight: 600, color: 'var(--primary-light)', marginBottom: 8 }}>⚡ 3-Step Setup:</div>
             <ol style={{ paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-tertiary)' }}>
-              <li>Download the lightweight <strong>PFM Print Agent</strong> folder to your laptop.</li>
+              <li>
+                <span 
+                  onClick={() => {
+                    try {
+                      const token = localStorage.getItem('token') || '';
+                      const apiBase = api.defaults.baseURL || '';
+                      const downloadUrl = `${apiBase}/shops/download-agent?token=${token}`;
+                      window.open(downloadUrl, '_blank');
+                    } catch (err) {
+                      toast.error('Failed to download print agent');
+                    }
+                  }}
+                  style={{ color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Download the lightweight PFM Print Agent ZIP
+                </span> and extract the folder to your laptop.
+              </li>
               <li>Double-click the <code>start-agent.command</code> (Mac) or <code>start-agent.bat</code> (Windows) file.</li>
               <li>Log in with your shop account credentials.</li>
             </ol>

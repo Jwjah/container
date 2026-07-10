@@ -226,3 +226,15 @@ exports.pollPrintJobs = async (req, res) => {
   }
 };
 
+// GET /api/shops/download-agent — Download print-agent.zip
+exports.downloadPrintAgent = async (req, res) => {
+  try {
+    const path = require('path');
+    const filePath = path.join(__dirname, '../assets/print-agent.zip');
+    res.download(filePath, 'print-agent.zip');
+  } catch (err) {
+    console.error('Download print agent error:', err);
+    res.status(500).json({ error: 'Failed to download print agent' });
+  }
+};
+
