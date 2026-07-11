@@ -1,6 +1,7 @@
 import { Payment } from '../domain/entities/Payment';
 import { PaymentStatus } from '../domain/enums/PaymentStatus';
 import { PaymentMethod } from '../domain/enums/PaymentMethod';
+import { Currency } from '../domain/enums/Currency';
 
 export interface GatewaySession {
   gatewayOrderId: string;
@@ -15,6 +16,7 @@ export interface NormalizedWebhookEvent {
   status: PaymentStatus;
   paymentMethod?: PaymentMethod | null;
   amount?: number | null; // in minor units (paise)
+  currency?: Currency | null;
   errorCode?: string | null;
   errorMessage?: string | null;
   providerMetadata?: Record<string, any> | null;
@@ -26,6 +28,12 @@ export interface IPaymentGateway {
    * Creates an order session on the external payment provider gateway.
    */
   createSession(payment: Payment): Promise<GatewaySession>;
+
+  /**
+   * Verifies the checkout payment signature returned by the client.
+   * Leverages timing-safe equal string hashing comparison.
+   */
+  verifyPaymentSignature(gatewayOrderId: string, gatewayPaymentId: string, signature: string): Promise<boolean>;
 
   /**
    * Verifies that the incoming webhook payload signature matches the provider secret key.

@@ -24,6 +24,12 @@ export interface IPaymentRepository {
   findByUuid(uuid: string, connection?: any): Promise<Payment | null>;
 
   /**
+   * Finds a Payment by its external UUID and locks the row (SELECT ... FOR UPDATE).
+   * Supports transaction propagation.
+   */
+  findByUuidForUpdate(uuid: string, connection?: any): Promise<Payment | null>;
+
+  /**
    * Finds a Payment by its human-readable payment reference string.
    */
   findByReference(reference: string, connection?: any): Promise<Payment | null>;
@@ -32,6 +38,12 @@ export interface IPaymentRepository {
    * Finds a Payment by the external gateway order/session ID.
    */
   findByGatewayOrderId(gatewayOrderId: string, connection?: any): Promise<Payment | null>;
+
+  /**
+   * Finds a Payment by the external gateway order/session ID and locks the row (SELECT ... FOR UPDATE).
+   * Supports transaction propagation.
+   */
+  findByGatewayOrderIdForUpdate(gatewayOrderId: string, connection?: any): Promise<Payment | null>;
 
   /**
    * Finds a Payment by the external gateway payment ID.

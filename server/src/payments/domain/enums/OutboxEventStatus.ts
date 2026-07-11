@@ -1,0 +1,6 @@
+export enum OutboxEventStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  PROCESSED = 'PROCESSED',
+  FAILED = 'FAILED'
+}

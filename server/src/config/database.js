@@ -70,7 +70,7 @@ if (USE_SQLITE) {
         if (trimmed.toUpperCase().startsWith('SELECT') || trimmed.toUpperCase().startsWith('WITH')) {
           const rows = sqlite.prepare(trimmed).all(...sqliteParams);
           return [rows, []];
-        } else if (trimmed.toUpperCase().startsWith('INSERT')) {
+        } else if (trimmed.toUpperCase().startsWith('INSERT') || trimmed.toUpperCase().startsWith('REPLACE')) {
           const info = sqlite.prepare(trimmed).run(...sqliteParams);
           return [{ insertId: info.lastInsertRowid, affectedRows: info.changes }, []];
         } else {
@@ -98,7 +98,7 @@ if (USE_SQLITE) {
             if (trimmed.toUpperCase().startsWith('SELECT') || trimmed.toUpperCase().startsWith('WITH')) {
               const rows = connDb.prepare(trimmed).all(...sqliteParams);
               return [rows, []];
-            } else if (trimmed.toUpperCase().startsWith('INSERT')) {
+            } else if (trimmed.toUpperCase().startsWith('INSERT') || trimmed.toUpperCase().startsWith('REPLACE')) {
               const info = connDb.prepare(trimmed).run(...sqliteParams);
               return [{ insertId: info.lastInsertRowid, affectedRows: info.changes }, []];
             } else {

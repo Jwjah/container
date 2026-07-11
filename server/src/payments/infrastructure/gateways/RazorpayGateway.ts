@@ -1,7 +1,11 @@
 import { IPaymentGateway, GatewaySession, NormalizedWebhookEvent } from '../../interfaces/IPaymentGateway';
 import { Payment } from '../../domain/entities/Payment';
 import { ProviderApiError } from '../../domain/errors/PaymentErrors';
+import { PaymentStatus } from '../../domain/enums/PaymentStatus';
+import { PaymentMethod } from '../../domain/enums/PaymentMethod';
+import { Currency } from '../../domain/enums/Currency';
 import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 export class RazorpayGateway implements IPaymentGateway {
   private razorpay: any;
@@ -48,13 +52,87 @@ export class RazorpayGateway implements IPaymentGateway {
   }
 
   public async verifyWebhookSignature(payload: string | Buffer, signature: string, secret: string): Promise<boolean> {
-    // Webhook verification is planned for Phase 3; placeholder in Phase 2
-    return false;
+    try {
+      const payloadStr = Buffer.isBuffer(payload) ? payload.toString('utf8') : payload;
+      const calculatedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payloadStr)
+        .digest('hex');
+
+      const calcBuf = Buffer.from(calculatedSignature, 'utf-8');
+      const sigBuf = Buffer.from(signature, 'utf-8');
+
+      if (calcBuf.length !== sigBuf.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(calcBuf, sigBuf);
+    } catch (err) {
+      return false;
+    }
   }
 
   public async parseWebhookEvent(payload: any): Promise<NormalizedWebhookEvent> {
-    // Webhook parsing is planned for Phase 3; placeholder in Phase 2
-    throw new Error('Webhook parsing not implemented in Phase 2');
+    try {
+      const event = payload.event;
+      const paymentEntity = payload.payload?.payment?.entity;
+      if (!paymentEntity) {
+        throw new Error('Invalid Razorpay webhook payload structure: payload.payment.entity is missing');
+      }
+
+      let status = PaymentStatus.INITIATED;
+      if (event === 'payment.captured') {
+        status = PaymentStatus.CAPTURED;
+      } else if (event === 'payment.failed') {
+        status = PaymentStatus.FAILED;
+      }
+
+      // Map Razorpay payment methods to our domain PaymentMethod enum
+      let paymentMethod: PaymentMethod | null = null;
+      const gatewayMethod = paymentEntity.method;
+      if (gatewayMethod === 'card') paymentMethod = PaymentMethod.CARD;
+      else if (gatewayMethod === 'upi') paymentMethod = PaymentMethod.UPI;
+      else if (gatewayMethod === 'netbanking') paymentMethod = PaymentMethod.NET_BANKING;
+      else if (gatewayMethod === 'wallet') paymentMethod = PaymentMethod.WALLET;
+      else if (gatewayMethod === 'emi') paymentMethod = PaymentMethod.EMI;
+
+      return {
+        gatewayOrderId: paymentEntity.order_id || null,
+        gatewayPaymentId: paymentEntity.id || null,
+        status,
+        paymentMethod,
+        amount: paymentEntity.amount,
+        currency: paymentEntity.currency === 'INR' ? Currency.INR : (paymentEntity.currency as any),
+        errorCode: paymentEntity.error_code || null,
+        errorMessage: paymentEntity.error_description || null,
+        providerMetadata: payload,
+        rawEvent: payload
+      };
+    } catch (err: any) {
+      throw new ProviderApiError('RAZORPAY', `Failed to parse webhook event: ${err.message}`, err);
+    }
+  }
+
+  public async verifyPaymentSignature(gatewayOrderId: string, gatewayPaymentId: string, signature: string): Promise<boolean> {
+    try {
+      const secret = process.env.RAZORPAY_KEY_SECRET || '';
+      const text = `${gatewayOrderId}|${gatewayPaymentId}`;
+      const calculatedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(text)
+        .digest('hex');
+
+      const calcBuf = Buffer.from(calculatedSignature, 'utf-8');
+      const sigBuf = Buffer.from(signature, 'utf-8');
+
+      if (calcBuf.length !== sigBuf.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(calcBuf, sigBuf);
+    } catch (err) {
+      return false;
+    }
   }
 
   /**
