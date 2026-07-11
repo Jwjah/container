@@ -125,7 +125,34 @@ const migrate = async () => {
       p256dh TEXT NOT NULL,
       auth TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )`
+    )`,
+    `CREATE TABLE IF NOT EXISTS payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT NOT NULL UNIQUE,
+      payment_reference TEXT NOT NULL UNIQUE,
+      order_id INTEGER NOT NULL,
+      student_id INTEGER NOT NULL,
+      amount INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'INR',
+      status TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      gateway TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      gateway_order_id TEXT DEFAULT NULL,
+      gateway_payment_id TEXT DEFAULT NULL,
+      error_code TEXT DEFAULT NULL,
+      error_message TEXT DEFAULT NULL,
+      provider_metadata TEXT DEFAULT NULL,
+      verified_at TEXT DEFAULT NULL,
+      failed_at TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id),
+      FOREIGN KEY (student_id) REFERENCES users(id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_gateway_payment_id ON payments(gateway_payment_id)`
   ];
 
   const mysqlQueries = [
@@ -263,6 +290,35 @@ const migrate = async () => {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       INDEX idx_user (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS payments (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      uuid VARCHAR(36) NOT NULL UNIQUE,
+      payment_reference VARCHAR(50) NOT NULL UNIQUE,
+      order_id INT NOT NULL,
+      student_id INT NOT NULL,
+      amount INT NOT NULL,
+      currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+      status VARCHAR(50) NOT NULL,
+      payment_method VARCHAR(50) NOT NULL,
+      gateway VARCHAR(50) NOT NULL,
+      idempotency_key VARCHAR(255) NOT NULL UNIQUE,
+      gateway_order_id VARCHAR(255) DEFAULT NULL,
+      gateway_payment_id VARCHAR(255) DEFAULT NULL,
+      error_code VARCHAR(100) DEFAULT NULL,
+      error_message VARCHAR(500) DEFAULT NULL,
+      provider_metadata JSON DEFAULT NULL,
+      verified_at TIMESTAMP NULL DEFAULT NULL,
+      failed_at TIMESTAMP NULL DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id),
+      FOREIGN KEY (student_id) REFERENCES users(id),
+      INDEX idx_payments_status (status),
+      INDEX idx_payments_order_id (order_id),
+      INDEX idx_payments_gateway_payment_id (gateway_payment_id),
+      INDEX idx_payments_uuid (uuid),
+      INDEX idx_payments_reference (payment_reference)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
@@ -272,12 +328,16 @@ const migrate = async () => {
     try {
       await db.execute(q);
       const tableName = q.match(/CREATE TABLE IF NOT EXISTS (\w+)/)?.[1];
-      console.log(`  ✅ Table "${tableName}" ready`);
+      if (tableName) {
+        console.log(`  ✅ Table "${tableName}" ready`);
+      } else {
+        console.log(`  ✅ Database setup statement complete`);
+      }
     } catch (err) {
       console.error('  ❌ Migration error:', err.message);
     }
   }
-  
+
   // Ensure new columns exist for existing databases
   const alterQueries = [
     `ALTER TABLE users ADD COLUMN phone TEXT DEFAULT NULL`,
@@ -286,14 +346,14 @@ const migrate = async () => {
     `ALTER TABLE users ADD COLUMN wallet_balance REAL DEFAULT 0.00`
   ];
   for (const q of alterQueries) {
-    try { await db.execute(q); } catch (e) {} // Ignore if column already exists
+    try { await db.execute(q); } catch (e) { } // Ignore if column already exists
   }
 
   // Seed super admin
   try {
     const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
     const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [process.env.ADMIN_EMAIL]);
-    
+
     if (!existing || existing.length === 0) {
       await db.execute(
         'INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, ?)',

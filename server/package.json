@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
+    "dev:ts": "nodemon --watch src -e ts,js --exec ts-node src/index.js",
     "start": "node src/index.js",
+    "build": "tsc",
     "migrate": "node src/migrations/migrate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -30,12 +32,20 @@
     "nodemailer": "^8.0.5",
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
+    "razorpay": "^2.9.6",
     "resend": "^4.8.0",
     "sharp": "^0.34.5",
     "uuid": "^13.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^7.0.2"
   }
 }
