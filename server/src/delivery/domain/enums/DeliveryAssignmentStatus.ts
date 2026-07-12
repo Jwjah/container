@@ -1,0 +1,8 @@
+export enum DeliveryAssignmentStatus {
+  ASSIGNED = 'ASSIGNED',
+  EN_ROUTE_TO_SHOP = 'EN_ROUTE_TO_SHOP',
+  DELIVERING = 'DELIVERING',
+  DELIVERED = 'DELIVERED',
+  REJECTED = 'REJECTED',
+  FAILED = 'FAILED'
+}

@@ -2,20 +2,54 @@ import { Router } from 'express';
 import { PaymentController } from '../interfaces/controllers/PaymentController';
 import { PaymentService } from '../application/services/PaymentService';
 import { SqlPaymentRepository } from '../infrastructure/persistence/SqlPaymentRepository';
+import { SqlOutboxRepository } from '../infrastructure/persistence/SqlOutboxRepository';
+import { SqlOrderRepository } from '../infrastructure/persistence/SqlOrderRepository';
+import { SqlInvoiceRepository } from '../infrastructure/persistence/SqlInvoiceRepository';
 import { RazorpayGateway } from '../infrastructure/gateways/RazorpayGateway';
+import { EventDispatcher } from '../application/events/EventDispatcher';
+import { OutboxWorker } from '../application/events/OutboxWorker';
+import { OrderFinalizationService } from '../application/services/OrderFinalizationService';
+import { InvoiceNumberGenerator } from '../application/services/InvoiceNumberGenerator';
 
 // Import CJS auth middleware using standard import
 const { authenticate } = require('../../middleware/auth');
 
 const router = Router();
 
-// Manual Dependency Injection
+// ── Shared Infrastructure ──────────────────────────────────────────────────
+// Singleton EventDispatcher — shared across all domain module bootstrappers
+const dispatcher = new EventDispatcher();
+
+// ── Repository Instances ────────────────────────────────────────────────────
 const paymentRepository = new SqlPaymentRepository();
-const paymentGateway = new RazorpayGateway();
-const paymentService = new PaymentService(paymentRepository, paymentGateway);
-const paymentController = new PaymentController(paymentService);
+const outboxRepository  = new SqlOutboxRepository();
+const orderRepository   = new SqlOrderRepository();
+const invoiceRepository = new SqlInvoiceRepository();
+const paymentGateway    = new RazorpayGateway();
 
-// Initiate payment (requires authentication)
-router.post('/', authenticate, paymentController.initiate);
+// ── Application Services ────────────────────────────────────────────────────
+const invoiceNumberGenerator   = new InvoiceNumberGenerator();
+const paymentService           = new PaymentService(paymentRepository, paymentGateway);
+const orderFinalizationService = new OrderFinalizationService(
+  orderRepository,
+  paymentRepository,
+  invoiceRepository,
+  outboxRepository,
+  invoiceNumberGenerator,
+);
 
+// ── Controller ──────────────────────────────────────────────────────────────
+const paymentController = new PaymentController(paymentService, orderFinalizationService);
+
+// ── Outbox Worker ───────────────────────────────────────────────────────────
+// Drives event-driven architecture for all downstream bounded contexts
+const outboxWorker = new OutboxWorker(outboxRepository, dispatcher);
+outboxWorker.start();
+
+// ── Routes ──────────────────────────────────────────────────────────────────
+router.post('/',        authenticate, paymentController.initiate);
+router.post('/verify',  authenticate, paymentController.verify);
+router.post('/webhook',               paymentController.webhook);
+
+export { dispatcher, outboxWorker };
 export default router;

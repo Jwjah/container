@@ -1,0 +1,5 @@
+export enum DeliveryFailureReason {
+  STUDENT_UNAVAILABLE = 'STUDENT_UNAVAILABLE',
+  INVALID_ADDRESS = 'INVALID_ADDRESS',
+  OTHER = 'OTHER'
+}

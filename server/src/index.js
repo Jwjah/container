@@ -39,7 +39,19 @@ app.use('/api/agent', require('./routes/agent'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/push', require('./routes/push'));
-app.use('/api/payments', require('./payments/routes/payments').default);
+const paymentsRouter = require('./payments/routes/payments').default;
+const { dispatcher } = require('./payments/routes/payments');
+
+app.use('/api/payments', paymentsRouter);
+app.use('/api/print-jobs', require('./payments/routes/print_jobs').default);
+
+// Register Fulfillment Module
+const { FulfillmentModule } = require('./fulfillment/fulfillment');
+FulfillmentModule.register(app, dispatcher);
+
+// Register Delivery Module
+const { DeliveryModule } = require('./delivery/delivery');
+DeliveryModule.register(app, dispatcher);
 
 // Health check
 app.get('/api/health', (req, res) => {
