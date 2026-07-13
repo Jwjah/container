@@ -8,12 +8,14 @@ import db from '../../../config/database';
  * RFC-007 Phase 7D Specification
  */
 export class OutboxProjectionEventSource implements IProjectionEventSource {
+  constructor(private readonly leaseDurationMs: number = 30000) {}
+
   /**
    * Poll eligible events: PENDING, FAILED with retries left, or PROCESSING with expired leases.
    */
   public async poll(batchSize: number): Promise<DomainEvent[]> {
     const isMySQL = process.env.DB_MODE === 'mysql';
-    const expiredTime = new Date(Date.now() - 5 * 60 * 1000); // 5 minute lease expiry
+    const expiredTime = new Date(Date.now() - this.leaseDurationMs);
     const expiredTimeStr = expiredTime.toISOString();
 
     // Select pending events, failed events with retries remaining (< 5), or stale processing events
