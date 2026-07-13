@@ -418,6 +418,73 @@ const migrate = async () => {
       error_message TEXT NOT NULL,
       retry_count INTEGER NOT NULL,
       failed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_shops_capacity (
+      shop_id INTEGER PRIMARY KEY,
+      max_parallel_orders INTEGER NOT NULL DEFAULT 5,
+      overload_wait_threshold_seconds INTEGER NOT NULL DEFAULT 7200,
+      is_accepting_orders INTEGER NOT NULL DEFAULT 1,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_printers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL,
+      pages_per_minute INTEGER NOT NULL DEFAULT 20,
+      duplex_supported INTEGER NOT NULL DEFAULT 1,
+      color_supported INTEGER NOT NULL DEFAULT 1,
+      supported_paper_sizes TEXT NOT NULL,
+      maximum_paper_weight INTEGER NOT NULL DEFAULT 80,
+      printable_media TEXT NOT NULL,
+      warmup_time_seconds INTEGER NOT NULL DEFAULT 30,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_printer_maintenance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      printer_id INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (printer_id) REFERENCES scheduling_printers(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_print_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL UNIQUE,
+      printer_id INTEGER DEFAULT NULL,
+      queue_position INTEGER NOT NULL DEFAULT 0,
+      estimated_start_time TEXT NOT NULL,
+      estimated_completion_time TEXT NOT NULL,
+      pages_count INTEGER NOT NULL,
+      duplex INTEGER NOT NULL DEFAULT 0,
+      color INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE,
+      FOREIGN KEY (printer_id) REFERENCES scheduling_printers(id) ON DELETE SET NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      variant TEXT NOT NULL,
+      quantity REAL NOT NULL DEFAULT 0.0,
+      unit TEXT NOT NULL,
+      low_stock_threshold REAL NOT NULL DEFAULT 100.0,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(shop_id, type, variant),
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
     )`
   ];
 
@@ -854,6 +921,73 @@ const migrate = async () => {
       error_message TEXT NOT NULL,
       retry_count INT NOT NULL,
       failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_shops_capacity (
+      shop_id INT PRIMARY KEY,
+      max_parallel_orders INT NOT NULL DEFAULT 5,
+      overload_wait_threshold_seconds INT NOT NULL DEFAULT 7200,
+      is_accepting_orders TINYINT(1) NOT NULL DEFAULT 1,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_printers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      shop_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      pages_per_minute INT NOT NULL DEFAULT 20,
+      duplex_supported TINYINT(1) NOT NULL DEFAULT 1,
+      color_supported TINYINT(1) NOT NULL DEFAULT 1,
+      supported_paper_sizes TEXT NOT NULL,
+      maximum_paper_weight INT NOT NULL DEFAULT 80,
+      printable_media TEXT NOT NULL,
+      warmup_time_seconds INT NOT NULL DEFAULT 30,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_printer_maintenance (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      printer_id INT NOT NULL,
+      start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      end_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      reason VARCHAR(500) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (printer_id) REFERENCES scheduling_printers(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_print_queue (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      shop_id INT NOT NULL,
+      order_id INT NOT NULL UNIQUE,
+      printer_id INT DEFAULT NULL,
+      queue_position INT NOT NULL DEFAULT 0,
+      estimated_start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      estimated_completion_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      pages_count INT NOT NULL,
+      duplex TINYINT(1) NOT NULL DEFAULT 0,
+      color TINYINT(1) NOT NULL DEFAULT 0,
+      status VARCHAR(50) NOT NULL,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE,
+      FOREIGN KEY (printer_id) REFERENCES scheduling_printers(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_inventory (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      shop_id INT NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      variant VARCHAR(50) NOT NULL,
+      quantity DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      unit VARCHAR(20) NOT NULL,
+      low_stock_threshold DECIMAL(10,2) NOT NULL DEFAULT 100.00,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_shop_inventory_item (shop_id, type, variant),
+      FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
