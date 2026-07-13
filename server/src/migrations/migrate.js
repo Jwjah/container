@@ -407,7 +407,18 @@ const migrate = async () => {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_timeline_occurred ON order_lifecycle_timeline_events(order_id, occurred_at)`,
     `CREATE INDEX IF NOT EXISTS idx_timeline_event_id ON order_lifecycle_timeline_events(event_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_timeline_correlation ON order_lifecycle_timeline_events(correlation_id)`
+    `CREATE INDEX IF NOT EXISTS idx_timeline_correlation ON order_lifecycle_timeline_events(correlation_id)`,
+    `CREATE TABLE IF NOT EXISTS dead_letter_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT NOT NULL UNIQUE,
+      aggregate_id TEXT NOT NULL,
+      aggregate_type TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      error_message TEXT NOT NULL,
+      retry_count INTEGER NOT NULL,
+      failed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`
   ];
 
   const mysqlQueries = [
@@ -832,6 +843,17 @@ const migrate = async () => {
       INDEX idx_timeline_occurred (order_id, occurred_at),
       INDEX idx_timeline_event_id (event_id),
       INDEX idx_timeline_correlation (correlation_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS dead_letter_events (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      event_id VARCHAR(36) NOT NULL UNIQUE,
+      aggregate_id VARCHAR(100) NOT NULL,
+      aggregate_type VARCHAR(100) NOT NULL,
+      event_type VARCHAR(100) NOT NULL,
+      payload LONGTEXT NOT NULL,
+      error_message TEXT NOT NULL,
+      retry_count INT NOT NULL,
+      failed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
