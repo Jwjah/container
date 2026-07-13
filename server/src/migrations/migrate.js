@@ -485,6 +485,10 @@ const migrate = async () => {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(shop_id, type, variant),
       FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_processed_events (
+      event_id TEXT PRIMARY KEY,
+      processed_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 
@@ -988,6 +992,10 @@ const migrate = async () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY uq_shop_inventory_item (shop_id, type, variant),
       FOREIGN KEY (shop_id) REFERENCES scheduling_shops_capacity(shop_id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_processed_events (
+      event_id VARCHAR(36) PRIMARY KEY,
+      processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
