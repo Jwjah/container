@@ -13,13 +13,14 @@
 // Bootstrap env before any import touches database.js
 process.env['DB_MODE'] = 'sqlite';
 
-import { SqlOrderLifecycleProjectionRepository, ProjectionConcurrencyError } from '../infrastructure/repositories/SqlOrderLifecycleProjectionRepository';
+import { SqlOrderLifecycleProjectionRepository } from '../infrastructure/repositories/SqlOrderLifecycleProjectionRepository';
 import { SqlTimelineEventRepository } from '../infrastructure/repositories/SqlTimelineEventRepository';
 import { SqlProcessedEventsRepository } from '../infrastructure/repositories/SqlProcessedEventsRepository';
 import { OrderLifecycleProjection } from '../domain/entities/OrderLifecycleProjection';
 import { TimelineEvent } from '../domain/entities/TimelineEvent';
 import { LifecycleState } from '../domain/enums/LifecycleState';
 import { ActorType } from '../domain/enums/ActorType';
+import { ProjectionConcurrencyError } from '../domain/errors/TrackingErrors';
 import db from '../../config/database';
 
 // ─────────────────────────────────────────────────────────────────────────────

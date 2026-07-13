@@ -1,23 +1,9 @@
 import { IOrderLifecycleProjectionRepository } from '../../interfaces/IOrderLifecycleProjectionRepository';
 import { OrderLifecycleProjection } from '../../domain/entities/OrderLifecycleProjection';
 import { LifecycleState } from '../../domain/enums/LifecycleState';
+import { ProjectionConcurrencyError } from '../../domain/errors/TrackingErrors';
 import db from '../../../config/database';
 
-/**
- * ProjectionConcurrencyError — thrown when an optimistic lock conflict is detected.
- * Callers must catch this and retry the event processing transaction.
- *
- * RFC-007 §21 — Optimistic Concurrency
- */
-export class ProjectionConcurrencyError extends Error {
-  constructor(orderId: number) {
-    super(
-      `Optimistic lock conflict on projection for orderId=${orderId}. ` +
-      `Another worker updated this row concurrently. Retry required.`,
-    );
-    this.name = 'ProjectionConcurrencyError';
-  }
-}
 
 /**
  * ProjectionNotFoundError — thrown when a required projection row does not exist.
