@@ -10,6 +10,8 @@ import db from '../../../config/database';
  * RFC-008 Refinement 7 & 10 Specification
  */
 export class SchedulingEngine {
+  public static schedulerDecisionsCount = 0;
+
   constructor(
     private readonly capacityCalculator: CapacityCalculator,
     private readonly inventoryService: InventoryService,
@@ -53,6 +55,7 @@ export class SchedulingEngine {
       await this.assignmentService.assignOrder(shopId, orderId, pagesCount, duplex, color, paperSize, conn);
 
       if (useTransaction) await conn.commit();
+      SchedulingEngine.schedulerDecisionsCount++;
     } catch (err: any) {
       if (useTransaction) await conn.rollback();
       console.error(`[SchedulingEngine.scheduleOrder] Scheduling failed for order ${orderId}:`, err.message);

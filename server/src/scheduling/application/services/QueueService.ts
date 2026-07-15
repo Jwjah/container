@@ -11,6 +11,8 @@ import db from '../../../config/database';
  * RFC-008 Part 6 Specification
  */
 export class QueueService {
+  public static printerFailoversCount = 0;
+
   constructor(
     private readonly printerRepo: IPrinterRepository,
     private readonly assignmentService: PrinterAssignmentService
@@ -97,6 +99,7 @@ export class QueueService {
       }
 
       if (useTransaction) await conn.commit();
+      QueueService.printerFailoversCount++;
     } catch (err: any) {
       if (useTransaction) await conn.rollback();
       console.error(`[QueueService.rescheduleOfflinePrinter] Reschedule failed for printer ${printerId}:`, err.message);

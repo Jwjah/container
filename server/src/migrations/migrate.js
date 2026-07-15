@@ -489,6 +489,138 @@ const migrate = async () => {
     `CREATE TABLE IF NOT EXISTS scheduling_processed_events (
       event_id TEXT PRIMARY KEY,
       processed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS scheduling_snapshots (
+      shop_id INTEGER PRIMARY KEY,
+      last_event_id TEXT NOT NULL,
+      last_event_sequence INTEGER NOT NULL,
+      state_data TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS notification_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      subject TEXT DEFAULT NULL,
+      body_markdown TEXT NOT NULL,
+      body_html TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS notification_preferences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      email_enabled INTEGER NOT NULL DEFAULT 1,
+      in_app_enabled INTEGER NOT NULL DEFAULT 1,
+      quiet_hours_start TEXT DEFAULT NULL,
+      quiet_hours_end TEXT DEFAULT NULL,
+      min_priority TEXT DEFAULT 'low',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      notification_id INTEGER NOT NULL,
+      channel TEXT NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT DEFAULT NULL,
+      attempted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS notification_batches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL,
+      recipient_count INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS processed_notification_events (
+      event_id TEXT PRIMARY KEY,
+      processed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_daily_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL UNIQUE,
+      total_orders INTEGER NOT NULL DEFAULT 0,
+      total_revenue REAL NOT NULL DEFAULT 0.0,
+      completed_orders INTEGER NOT NULL DEFAULT 0,
+      cancelled_orders INTEGER NOT NULL DEFAULT 0,
+      avg_completion_time_secs REAL NOT NULL DEFAULT 0.0,
+      avg_delivery_time_secs REAL NOT NULL DEFAULT 0.0,
+      low_stock_events INTEGER NOT NULL DEFAULT 0,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_shop_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      shop_id INTEGER NOT NULL UNIQUE,
+      total_orders INTEGER NOT NULL DEFAULT 0,
+      completed_orders INTEGER NOT NULL DEFAULT 0,
+      cancelled_orders INTEGER NOT NULL DEFAULT 0,
+      total_revenue REAL NOT NULL DEFAULT 0.0,
+      avg_completion_time_secs REAL NOT NULL DEFAULT 0.0,
+      avg_delivery_time_secs REAL NOT NULL DEFAULT 0.0,
+      printer_utilization_pct REAL NOT NULL DEFAULT 0.0,
+      queue_utilization_pct REAL NOT NULL DEFAULT 0.0,
+      low_stock_events INTEGER NOT NULL DEFAULT 0,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_user_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      total_orders INTEGER NOT NULL DEFAULT 0,
+      completed_orders INTEGER NOT NULL DEFAULT 0,
+      cancelled_orders INTEGER NOT NULL DEFAULT 0,
+      total_spend REAL NOT NULL DEFAULT 0.0,
+      avg_order_value REAL NOT NULL DEFAULT 0.0,
+      last_order_at TEXT DEFAULT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_order_facts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL UNIQUE,
+      shop_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      revenue REAL NOT NULL DEFAULT 0.0,
+      page_count INTEGER NOT NULL DEFAULT 0,
+      is_color INTEGER NOT NULL DEFAULT 0,
+      order_created_at TEXT NOT NULL,
+      payment_confirmed_at TEXT DEFAULT NULL,
+      print_started_at TEXT DEFAULT NULL,
+      print_completed_at TEXT DEFAULT NULL,
+      delivery_completed_at TEXT DEFAULT NULL,
+      cancelled_at TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_events_processed (
+      event_id TEXT PRIMARY KEY,
+      processed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS analytics_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_date TEXT NOT NULL UNIQUE,
+      total_orders INTEGER NOT NULL DEFAULT 0,
+      total_revenue REAL NOT NULL DEFAULT 0.0,
+      total_completed INTEGER NOT NULL DEFAULT 0,
+      total_cancelled INTEGER NOT NULL DEFAULT 0,
+      last_event_sequence INTEGER NOT NULL DEFAULT 0,
+      state_data TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 
@@ -996,6 +1128,141 @@ const migrate = async () => {
     `CREATE TABLE IF NOT EXISTS scheduling_processed_events (
       event_id VARCHAR(36) PRIMARY KEY,
       processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS scheduling_snapshots (
+      shop_id INT PRIMARY KEY,
+      last_event_id VARCHAR(36) NOT NULL,
+      last_event_sequence INT NOT NULL,
+      state_data LONGTEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS notifications (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      type VARCHAR(50) NOT NULL,
+      priority VARCHAR(20) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      is_read TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS notification_templates (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL UNIQUE,
+      subject VARCHAR(255) DEFAULT NULL,
+      body_markdown TEXT NOT NULL,
+      body_html TEXT NOT NULL,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS notification_preferences (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL UNIQUE,
+      email_enabled TINYINT(1) NOT NULL DEFAULT 1,
+      in_app_enabled TINYINT(1) NOT NULL DEFAULT 1,
+      quiet_hours_start VARCHAR(5) DEFAULT NULL,
+      quiet_hours_end VARCHAR(5) DEFAULT NULL,
+      min_priority VARCHAR(20) DEFAULT 'low',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      notification_id INT NOT NULL,
+      channel VARCHAR(50) NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      error_message TEXT DEFAULT NULL,
+      attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS notification_batches (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      shop_id INT NOT NULL,
+      recipient_count INT NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS processed_notification_events (
+      event_id VARCHAR(36) PRIMARY KEY,
+      processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_daily_metrics (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      date DATE NOT NULL UNIQUE,
+      total_orders INT NOT NULL DEFAULT 0,
+      total_revenue DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      completed_orders INT NOT NULL DEFAULT 0,
+      cancelled_orders INT NOT NULL DEFAULT 0,
+      avg_completion_time_secs DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      avg_delivery_time_secs DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      low_stock_events INT NOT NULL DEFAULT 0,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_shop_metrics (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      shop_id INT NOT NULL UNIQUE,
+      total_orders INT NOT NULL DEFAULT 0,
+      completed_orders INT NOT NULL DEFAULT 0,
+      cancelled_orders INT NOT NULL DEFAULT 0,
+      total_revenue DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      avg_completion_time_secs DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      avg_delivery_time_secs DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      printer_utilization_pct DECIMAL(5,4) NOT NULL DEFAULT 0.0000,
+      queue_utilization_pct DECIMAL(5,4) NOT NULL DEFAULT 0.0000,
+      low_stock_events INT NOT NULL DEFAULT 0,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_user_metrics (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL UNIQUE,
+      total_orders INT NOT NULL DEFAULT 0,
+      completed_orders INT NOT NULL DEFAULT 0,
+      cancelled_orders INT NOT NULL DEFAULT 0,
+      total_spend DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      avg_order_value DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      last_order_at TIMESTAMP NULL DEFAULT NULL,
+      version INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_order_facts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      order_id INT NOT NULL UNIQUE,
+      shop_id INT NOT NULL,
+      user_id INT NOT NULL,
+      date DATE NOT NULL,
+      revenue DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+      page_count INT NOT NULL DEFAULT 0,
+      is_color TINYINT(1) NOT NULL DEFAULT 0,
+      order_created_at TIMESTAMP NOT NULL,
+      payment_confirmed_at TIMESTAMP NULL DEFAULT NULL,
+      print_started_at TIMESTAMP NULL DEFAULT NULL,
+      print_completed_at TIMESTAMP NULL DEFAULT NULL,
+      delivery_completed_at TIMESTAMP NULL DEFAULT NULL,
+      cancelled_at TIMESTAMP NULL DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_order_facts_shop (shop_id),
+      INDEX idx_order_facts_user (user_id),
+      INDEX idx_order_facts_date (date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_events_processed (
+      event_id VARCHAR(36) PRIMARY KEY,
+      processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS analytics_snapshots (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      snapshot_date DATE NOT NULL UNIQUE,
+      total_orders INT NOT NULL DEFAULT 0,
+      total_revenue DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+      total_completed INT NOT NULL DEFAULT 0,
+      total_cancelled INT NOT NULL DEFAULT 0,
+      last_event_sequence INT NOT NULL DEFAULT 0,
+      state_data LONGTEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 

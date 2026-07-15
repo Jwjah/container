@@ -52,3 +52,12 @@ export interface ReplenishRequestDTO {
   variant: string; // 'A4', 'A3', 'Black', 'Color'
   quantity: number;
 }
+
+export interface CapacityForecastDTO {
+  shopId: number;
+  printerUtilizationPercent: number;
+  expectedOverloadTimeSeconds: number;
+  paperDaysRemaining: number;
+  inkDaysRemaining: number;
+  forecastTimestamp: string;
+}

@@ -5,6 +5,7 @@
 import { SqlShopCapacityRepository } from '../infrastructure/repositories/SqlShopCapacityRepository';
 import { SqlPrinterRepository } from '../infrastructure/repositories/SqlPrinterRepository';
 import { SqlInventoryRepository } from '../infrastructure/repositories/SqlInventoryRepository';
+import { SqlSchedulingSnapshotRepository } from '../infrastructure/repositories/SqlSchedulingSnapshotRepository';
 import { ShopCapacity } from '../domain/entities/ShopCapacity';
 import { Printer } from '../domain/entities/Printer';
 import { QueueSlot } from '../domain/entities/QueueSlot';
@@ -21,6 +22,8 @@ import { QueueService } from '../application/services/QueueService';
 import { MaintenancePlanner } from '../application/services/MaintenancePlanner';
 import { EtaCalculationService } from '../application/services/EtaCalculationService';
 import { SchedulingEngine } from '../application/services/SchedulingEngine';
+import { CapacityForecastService } from '../application/services/CapacityForecastService';
+import { SchedulingSnapshotService } from '../application/services/SchedulingSnapshotService';
 import { SchedulingEventDispatcher } from '../application/events/SchedulingEventDispatcher';
 import { OrderCreatedHandler, OrderCancelledHandler, PrintStartedHandler, PrintCompletedHandler, PrinterOfflineHandler, MaintenanceScheduledHandler } from '../application/events/SchedulingEventHandlers';
 import { SchedulingEventSource } from '../worker/SchedulingEventSource';
@@ -93,6 +96,7 @@ async function runAll() {
   const capacityRepo = new SqlShopCapacityRepository();
   const printerRepo = new SqlPrinterRepository();
   const inventoryRepo = new SqlInventoryRepository();
+  const snapshotRepo = new SqlSchedulingSnapshotRepository();
   const strategy = new ECTSchedulingStrategy();
 
   const capacityCalculator = new CapacityCalculator(capacityRepo, printerRepo);
@@ -101,6 +105,8 @@ async function runAll() {
   const queueService = new QueueService(printerRepo, assignmentService);
   const maintenancePlanner = new MaintenancePlanner(printerRepo);
   const etaService = new EtaCalculationService(printerRepo, strategy);
+  const forecastService = new CapacityForecastService(capacityRepo, printerRepo, inventoryRepo);
+  const snapshotService = new SchedulingSnapshotService(capacityRepo, printerRepo, inventoryRepo, snapshotRepo);
 
   const schedulingEngine = new SchedulingEngine(capacityCalculator, inventoryService, assignmentService);
 
@@ -127,7 +133,7 @@ async function runAll() {
   const replayRepo = new ReplayRepository();
   const progressTracker = new ReplayProgressTracker();
   const replayWorker = new SchedulingReplayWorker(dispatcher, progressTracker);
-  const replayService = new SchedulingReplayService(replayRepo, activeWorker, replayWorker, progressTracker);
+  const replayService = new SchedulingReplayService(replayRepo, activeWorker, replayWorker, progressTracker, snapshotService);
   const metricsService = new SchedulingMetricsService(eventSource);
 
   const controller = new SchedulingController(
@@ -135,6 +141,7 @@ async function runAll() {
     printerRepo,
     inventoryService,
     etaService,
+    forecastService,
     replayService,
     progressTracker,
     metricsService
@@ -148,8 +155,8 @@ async function runAll() {
   await db.execute('DELETE FROM scheduling_processed_events');
   await db.execute('DELETE FROM dead_letter_events');
 
-  // Set up mock base tables data
-  await db.execute("INSERT OR IGNORE INTO shops (id, shop_name, user_id) VALUES (40, 'Campus Shop Main', 30)");
+  // Set up mock base tables data — use REPLACE to ensure correct owner regardless of prior test runs
+  await db.execute("INSERT OR REPLACE INTO shops (id, shop_name, user_id) VALUES (40, 'Campus Shop Main', 30)");
   await db.execute("INSERT OR IGNORE INTO users (id, name, email, password, role) VALUES (99, 'Student Bob', 'bob@campus.edu', 'pass', 'student')");
   await db.execute("INSERT OR IGNORE INTO orders (id, order_hash, student_id, shop_id, status) VALUES (70002, 'hash70002', 99, 40, 'pending')");
 

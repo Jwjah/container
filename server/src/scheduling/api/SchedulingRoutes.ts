@@ -18,6 +18,13 @@ export function createSchedulingRoutes(controller: SchedulingController): Router
   );
 
   router.get(
+    '/shops/:shopId/forecast',
+    authenticate,
+    SchedulingValidation.validateShopId,
+    controller.getCapacityForecast
+  );
+
+  router.get(
     '/shops/:shopId/printers',
     authenticate,
     authorize('shop', 'admin'),

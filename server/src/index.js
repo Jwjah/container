@@ -53,6 +53,18 @@ FulfillmentModule.register(app, dispatcher);
 const { DeliveryModule } = require('./delivery/delivery');
 DeliveryModule.register(app, dispatcher);
 
+// Register Scheduling Bounded Context (RFC-008)
+const { SchedulingModule } = require('./scheduling/scheduling');
+SchedulingModule.register(app);
+
+// Register Notification Bounded Context (RFC-009)
+const { NotificationModule } = require('./notification/notification');
+NotificationModule.register(app);
+
+// Register Analytics Bounded Context (RFC-010)
+const { AnalyticsModule } = require('./analytics/analytics');
+AnalyticsModule.register(app);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), env: process.env.NODE_ENV });

@@ -3,6 +3,7 @@ import { IShopCapacityRepository } from '../interfaces/IShopCapacityRepository';
 import { IPrinterRepository } from '../interfaces/IPrinterRepository';
 import { InventoryService } from '../application/services/InventoryService';
 import { EtaCalculationService } from '../application/services/EtaCalculationService';
+import { CapacityForecastService } from '../application/services/CapacityForecastService';
 import { SchedulingReplayService } from '../application/replay/SchedulingReplayService';
 import { ReplayProgressTracker } from '../application/replay/ReplayProgressTracker';
 import { SchedulingMapper } from './SchedulingMapper';
@@ -20,6 +21,7 @@ export class SchedulingController {
     private readonly printerRepo: IPrinterRepository,
     private readonly inventoryService: InventoryService,
     private readonly etaService: EtaCalculationService,
+    private readonly forecastService: CapacityForecastService,
     private readonly replayService: SchedulingReplayService,
     private readonly progressTracker: ReplayProgressTracker,
     private readonly metricsService: SchedulingMetricsService
@@ -139,6 +141,22 @@ export class SchedulingController {
         orderId,
         ...eta
       }));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  };
+
+  public getCapacityForecast = async (req: Request, res: Response): Promise<void> => {
+    const shopId = Number(req.params.shopId);
+    try {
+      const isAuthorized = await this.checkShopAccess(req, shopId, true);
+      if (!isAuthorized) {
+        res.status(403).json({ error: 'Access denied to capacity forecast.' });
+        return;
+      }
+
+      const forecast = await this.forecastService.getForecast(shopId);
+      res.status(200).json(forecast);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
