@@ -12,6 +12,24 @@ import dynamic from 'next/dynamic';
 const StirlingEditor = dynamic(() => import('@/components/StirlingEditor'), { ssr: false });
 const ImageEditor = dynamic(() => import('@/components/ImageEditor'), { ssr: false });
 
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false);
+      return;
+    }
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export default function NewOrderPage() {
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
@@ -67,6 +85,13 @@ export default function NewOrderPage() {
     }
     setLoading(true);
     try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast.error('Failed to load payment gateway SDK');
+        setLoading(false);
+        return;
+      }
+
       const formData = new FormData();
       files.forEach(f => formData.append('files', f));
       formData.append('shop_id', String(selectedShop));
@@ -81,10 +106,51 @@ export default function NewOrderPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      toast.success(`Order placed! Total: ₹${data.order.totalPrice}`);
-      router.push('/student/orders');
+      const order = data.order;
+      toast.success(`Order placed! Total: ₹${order.totalPrice}. Initiating payment...`);
+
+      const idempotencyKey = `idemp-${order.id}-${Date.now()}`;
+      const paymentResponse = await api.post('/payments', {
+        orderId: order.id,
+        paymentMethod: 'UPI',
+        gateway: 'RAZORPAY',
+        idempotencyKey
+      });
+
+      const { checkoutPayload, payment } = paymentResponse.data;
+
+      const options = {
+        ...checkoutPayload,
+        handler: async (response: any) => {
+          setLoading(true);
+          try {
+            await api.post('/payments/verify', {
+              paymentUuid: payment.uuid,
+              gatewayPaymentId: response.razorpay_payment_id,
+              gatewayOrderId: response.razorpay_order_id,
+              signature: response.razorpay_signature
+            });
+            toast.success('Payment successful and verified! 🎉');
+            router.push('/student/orders');
+          } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Payment verification failed');
+            router.push('/student/orders');
+          } finally {
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            toast.error('Payment cancelled');
+            router.push('/student/orders');
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Order failed');
+      toast.error(err.response?.data?.error || 'Order placement or payment initiation failed');
     } finally {
       setLoading(false);
     }
