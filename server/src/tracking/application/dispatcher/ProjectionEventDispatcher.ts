@@ -26,6 +26,11 @@ export class ProjectionEventDispatcher {
   public async dispatch(event: DomainEvent, connection?: any): Promise<boolean> {
     console.log(`[ProjectionEventDispatcher] Dispatching event "${event.eventType}" (id=${event.eventId}, orderId=${event.payload?.orderId})`);
 
+    if (!this.registry.has(event.eventType)) {
+      console.log(`[ProjectionEventDispatcher] No handler registered for event type "${event.eventType}". Skipping.`);
+      return false;
+    }
+
     const handler = this.registry.get(event.eventType);
     const context: ProjectionContext = {
       projectionUpdateService: this.updateService,

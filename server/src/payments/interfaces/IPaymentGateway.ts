@@ -1,6 +1,7 @@
 import { Payment } from '../domain/entities/Payment';
 import { PaymentStatus } from '../domain/enums/PaymentStatus';
 import { PaymentMethod } from '../domain/enums/PaymentMethod';
+import { Currency } from '../domain/enums/Currency';
 
 export interface GatewaySession {
   gatewayOrderId: string;
@@ -15,6 +16,7 @@ export interface NormalizedWebhookEvent {
   status: PaymentStatus;
   paymentMethod?: PaymentMethod | null;
   amount?: number | null; // in minor units (paise)
+  currency?: Currency | null;
   errorCode?: string | null;
   errorMessage?: string | null;
   providerMetadata?: Record<string, any> | null;
@@ -37,4 +39,9 @@ export interface IPaymentGateway {
    * Parses the raw gateway payload and normalizes it into a unified transaction event.
    */
   parseWebhookEvent(payload: any): Promise<NormalizedWebhookEvent>;
+
+  /**
+   * Verifies that the payment verification signature matches the order and payment ID.
+   */
+  verifyPaymentSignature(orderId: string, paymentId: string, signature: string): Promise<boolean>;
 }

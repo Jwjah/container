@@ -25,6 +25,7 @@ const ADMIN_ID = 800;
 
 async function setupDb() {
   // Clear tables
+  await db.execute('PRAGMA foreign_keys = OFF');
   await db.execute('DELETE FROM fulfillment_history');
   await db.execute('DELETE FROM fulfillments');
   await db.execute("DELETE FROM outbox_events WHERE aggregate_type = 'FULFILLMENT' OR aggregate_type = 'PRINT_JOB'");
@@ -33,6 +34,7 @@ async function setupDb() {
   await db.execute('DELETE FROM orders');
   await db.execute('DELETE FROM shops');
   await db.execute('DELETE FROM users');
+  await db.execute('PRAGMA foreign_keys = ON');
 
   // Insert Users
   await db.execute(

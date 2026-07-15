@@ -17,10 +17,13 @@ export interface Payment {
   idempotencyKey: string;
   gatewayOrderId?: string | null;
   gatewayPaymentId?: string | null;
+  gatewaySignature?: string | null;
+  verificationMethod?: string | null;
   errorCode?: string | null;
   errorMessage?: string | null;
   providerMetadata?: Record<string, any> | null;
   verifiedAt?: Date | null;
+  capturedAt?: Date | null;
   failedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;

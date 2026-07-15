@@ -17,11 +17,85 @@ const statusColors: Record<string, string> = {
   ready: 'badge-ready', out_for_delivery: 'badge-out_for_delivery', delivered: 'badge-delivered', cancelled: 'badge-cancelled',
 };
 
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') {
+      resolve(false);
+      return;
+    }
+    if ((window as any).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<any>(null);
   const [scannerType, setScannerType] = useState<'shop' | 'agent' | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+
+  const handlePay = async (order: any) => {
+    setIsPaying(true);
+    try {
+      const loaded = await loadRazorpayScript();
+      if (!loaded) {
+        toast.error('Failed to load payment gateway SDK');
+        setIsPaying(false);
+        return;
+      }
+
+      const idempotencyKey = `idemp-${order.id}-${Date.now()}`;
+      const { data } = await api.post('/payments', {
+        orderId: order.id,
+        paymentMethod: 'UPI',
+        gateway: 'RAZORPAY',
+        idempotencyKey
+      });
+
+      const { checkoutPayload, payment } = data;
+
+      const options = {
+        ...checkoutPayload,
+        handler: async (response: any) => {
+          setIsPaying(true);
+          try {
+            await api.post('/payments/verify', {
+              paymentUuid: payment.uuid,
+              gatewayPaymentId: response.razorpay_payment_id,
+              gatewayOrderId: response.razorpay_order_id,
+              signature: response.razorpay_signature
+            });
+            toast.success('Payment successful and verified! 🎉');
+            setSelected(null);
+            loadOrders();
+          } catch (err: any) {
+            toast.error(err.response?.data?.error || 'Payment verification failed');
+          } finally {
+            setIsPaying(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setIsPaying(false);
+          }
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to initiate payment');
+      setIsPaying(false);
+    }
+  };
 
   const loadOrders = (background = false) => {
     if (!background) setLoading(true);
@@ -211,6 +285,20 @@ export default function OrdersPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {selected.status === 'pending' && (
+              <div style={{ textAlign: 'center', marginTop: 24 }}>
+                <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>Complete payment to confirm your print job.</p>
+                <TapButton 
+                  className="btn btn-primary btn-lg" 
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} 
+                  onClick={() => handlePay(selected)}
+                  disabled={isPaying}
+                >
+                  💳 {isPaying ? 'Processing...' : 'Pay Now'}
+                </TapButton>
               </div>
             )}
 

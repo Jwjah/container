@@ -166,6 +166,30 @@ export class SqlPaymentRepository implements IPaymentRepository {
     }
   }
 
+  public async findByUuidForUpdate(uuid: string, connection?: any): Promise<Payment | null> {
+    const runner = connection || db;
+    const query = 'SELECT * FROM payments WHERE uuid = ? FOR UPDATE';
+    try {
+      const [rows]: any = await runner.execute(query, [uuid]);
+      if (!rows || rows.length === 0) return null;
+      return this.toEntity(rows[0]);
+    } catch (err: any) {
+      throw new PaymentRepositoryError(`Failed to find payment for update by UUID: ${uuid}`, err);
+    }
+  }
+
+  public async findByGatewayOrderIdForUpdate(gatewayOrderId: string, connection?: any): Promise<Payment | null> {
+    const runner = connection || db;
+    const query = 'SELECT * FROM payments WHERE gateway_order_id = ? FOR UPDATE';
+    try {
+      const [rows]: any = await runner.execute(query, [gatewayOrderId]);
+      if (!rows || rows.length === 0) return null;
+      return this.toEntity(rows[0]);
+    } catch (err: any) {
+      throw new PaymentRepositoryError(`Failed to find payment for update by gateway order ID: ${gatewayOrderId}`, err);
+    }
+  }
+
   private toRow(payment: Payment): any[] {
     return [
       payment.uuid,

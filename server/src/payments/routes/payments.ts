@@ -5,6 +5,7 @@ import { SqlPaymentRepository } from '../infrastructure/persistence/SqlPaymentRe
 import { SqlOutboxRepository } from '../infrastructure/persistence/SqlOutboxRepository';
 import { SqlOrderRepository } from '../infrastructure/persistence/SqlOrderRepository';
 import { SqlInvoiceRepository } from '../infrastructure/persistence/SqlInvoiceRepository';
+import { SqlPrintJobRepository } from '../infrastructure/persistence/SqlPrintJobRepository';
 import { RazorpayGateway } from '../infrastructure/gateways/RazorpayGateway';
 import { EventDispatcher } from '../application/events/EventDispatcher';
 import { OutboxWorker } from '../application/events/OutboxWorker';
@@ -25,17 +26,18 @@ const paymentRepository = new SqlPaymentRepository();
 const outboxRepository  = new SqlOutboxRepository();
 const orderRepository   = new SqlOrderRepository();
 const invoiceRepository = new SqlInvoiceRepository();
+const printJobRepository = new SqlPrintJobRepository();
 const paymentGateway    = new RazorpayGateway();
 
 // ── Application Services ────────────────────────────────────────────────────
 const invoiceNumberGenerator   = new InvoiceNumberGenerator();
 const paymentService           = new PaymentService(paymentRepository, paymentGateway);
 const orderFinalizationService = new OrderFinalizationService(
-  orderRepository,
   paymentRepository,
+  orderRepository,
   invoiceRepository,
-  outboxRepository,
-  invoiceNumberGenerator,
+  printJobRepository,
+  outboxRepository
 );
 
 // ── Controller ──────────────────────────────────────────────────────────────

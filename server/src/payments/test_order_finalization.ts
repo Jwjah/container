@@ -27,7 +27,7 @@ const SHOP_ID = 400;
 
 async function setupDb() {
   // Setup database tables and mock records
-  // Delete referencing child tables first, then parent tables to avoid foreign key errors
+  await db.execute('PRAGMA foreign_keys = OFF');
   try { await db.execute('DELETE FROM fulfillment_history'); } catch (e) {}
   try { await db.execute('DELETE FROM fulfillments'); } catch (e) {}
   try { await db.execute('DELETE FROM print_job_history'); } catch (e) {}
@@ -38,6 +38,7 @@ async function setupDb() {
   try { await db.execute('DELETE FROM shops'); } catch (e) {}
   try { await db.execute('DELETE FROM users'); } catch (e) {}
   await db.execute("DELETE FROM outbox_events");
+  await db.execute('PRAGMA foreign_keys = ON');
 
   // Insert Student & Shop Manager users
   await db.execute(

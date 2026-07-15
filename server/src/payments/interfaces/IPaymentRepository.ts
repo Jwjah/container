@@ -47,4 +47,14 @@ export interface IPaymentRepository {
    * Finds an active (non-terminal) Payment by order ID.
    */
   findActiveByOrderId(orderId: number, connection?: any): Promise<Payment | null>;
+
+  /**
+   * Finds a Payment by its external UUID with a row lock.
+   */
+  findByUuidForUpdate(uuid: string, connection?: any): Promise<Payment | null>;
+
+  /**
+   * Finds a Payment by the external gateway order ID with a row lock.
+   */
+  findByGatewayOrderIdForUpdate(gatewayOrderId: string, connection?: any): Promise<Payment | null>;
 }

@@ -1,5 +1,6 @@
 import { DomainEvent } from '../../../tracking/domain/events/DomainEvent';
 import { NotificationEventDispatcher } from '../../worker/NotificationEventDispatcher';
+import { NotificationEventSource } from '../../worker/NotificationEventSource';
 import { ReplayProgressTracker } from './ReplayProgressTracker';
 import { NotificationMetricsService } from '../metrics/NotificationMetricsService';
 import db from '../../../config/database';
@@ -10,6 +11,13 @@ import db from '../../../config/database';
  * RFC-009 Specification
  */
 export class NotificationReplayWorker {
+  /**
+   * Shared event source used solely for its acknowledge() helper — this writes
+   * the processed marker into `processed_notification_events` inside the replay
+   * transaction so the live worker does not re-fire handlers after restart.
+   */
+  private readonly eventSource = new NotificationEventSource();
+
   constructor(
     private readonly dispatcher: NotificationEventDispatcher,
     private readonly tracker: ReplayProgressTracker
@@ -39,6 +47,8 @@ export class NotificationReplayWorker {
           const event = events[i];
           // Dispatch event to rebuild notifications projection state
           await this.dispatcher.dispatch(event, conn);
+          // Mark processed so the live worker does not re-fire after restart
+          await this.eventSource.acknowledge(event, conn);
           NotificationMetricsService.replayEventsProcessedCount++;
         }
 

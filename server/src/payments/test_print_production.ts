@@ -20,6 +20,7 @@ const UNAUTH_SHOP_ID = 600;
 
 async function setupDb() {
   // Clear print production tables
+  await db.execute('PRAGMA foreign_keys = OFF');
   try { await db.execute('DELETE FROM fulfillment_history'); } catch (e) {}
   try { await db.execute('DELETE FROM fulfillments'); } catch (e) {}
   await db.execute("DELETE FROM outbox_events");
@@ -35,6 +36,7 @@ async function setupDb() {
   await db.execute('DELETE FROM orders WHERE id IN (1001, 1002, 1003, 1004, 1005, 1006)');
   await db.execute('DELETE FROM shops WHERE id IN (?, ?)', [SHOP_ID, UNAUTH_SHOP_ID]);
   await db.execute('DELETE FROM users WHERE id IN (?, ?, ?)', [STUDENT_ID, MANAGER_ID, UNAUTH_MANAGER_ID]);
+  await db.execute('PRAGMA foreign_keys = ON');
 
   // Insert Users
   await db.execute(

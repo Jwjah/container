@@ -15,7 +15,7 @@ if (USE_SQLITE) {
   const fs = require('fs');
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-  const sqlite = new Database(dbPath);
+  const sqlite = new Database(dbPath, { timeout: 10000 });
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
 
@@ -47,7 +47,8 @@ if (USE_SQLITE) {
       .replace(/NOW\(\)/gi, "datetime('now')")
       .replace(/DATE\((\w+)\)/gi, "date($1)")
       .replace(/COALESCE/gi, 'COALESCE')
-      .replace(/LIMIT\s+\?\s+OFFSET\s+\?/gi, 'LIMIT ? OFFSET ?');
+      .replace(/LIMIT\s+\?\s+OFFSET\s+\?/gi, 'LIMIT ? OFFSET ?')
+      .replace(/\bFOR UPDATE\b/gi, '');
 
     const sqliteParams = params.map(p => {
       if (p === true) return 1;
@@ -70,7 +71,7 @@ if (USE_SQLITE) {
         if (trimmed.toUpperCase().startsWith('SELECT') || trimmed.toUpperCase().startsWith('WITH')) {
           const rows = sqlite.prepare(trimmed).all(...sqliteParams);
           return [rows, []];
-        } else if (trimmed.toUpperCase().startsWith('INSERT')) {
+        } else if (trimmed.toUpperCase().startsWith('INSERT') || trimmed.toUpperCase().startsWith('REPLACE')) {
           const info = sqlite.prepare(trimmed).run(...sqliteParams);
           return [{ insertId: info.lastInsertRowid, affectedRows: info.changes }, []];
         } else {
@@ -86,7 +87,7 @@ if (USE_SQLITE) {
       }
     },
     getConnection: async () => {
-      const connDb = new Database(dbPath);
+      const connDb = new Database(dbPath, { timeout: 10000 });
       connDb.pragma('journal_mode = WAL');
       connDb.pragma('foreign_keys = ON');
 
@@ -98,7 +99,7 @@ if (USE_SQLITE) {
             if (trimmed.toUpperCase().startsWith('SELECT') || trimmed.toUpperCase().startsWith('WITH')) {
               const rows = connDb.prepare(trimmed).all(...sqliteParams);
               return [rows, []];
-            } else if (trimmed.toUpperCase().startsWith('INSERT')) {
+            } else if (trimmed.toUpperCase().startsWith('INSERT') || trimmed.toUpperCase().startsWith('REPLACE')) {
               const info = connDb.prepare(trimmed).run(...sqliteParams);
               return [{ insertId: info.lastInsertRowid, affectedRows: info.changes }, []];
             } else {

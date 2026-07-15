@@ -1,7 +1,9 @@
 import { IPaymentGateway, GatewaySession, NormalizedWebhookEvent } from '../../interfaces/IPaymentGateway';
 import { Payment } from '../../domain/entities/Payment';
 import { ProviderApiError } from '../../domain/errors/PaymentErrors';
+import { PaymentStatus } from '../../domain/enums/PaymentStatus';
 import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 export class RazorpayGateway implements IPaymentGateway {
   private razorpay: any;
@@ -48,13 +50,60 @@ export class RazorpayGateway implements IPaymentGateway {
   }
 
   public async verifyWebhookSignature(payload: string | Buffer, signature: string, secret: string): Promise<boolean> {
-    // Webhook verification is planned for Phase 3; placeholder in Phase 2
-    return false;
+    try {
+      const payloadStr = Buffer.isBuffer(payload) ? payload.toString('utf8') : payload;
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payloadStr)
+        .digest('hex');
+      return expectedSignature === signature;
+    } catch (err) {
+      return false;
+    }
   }
 
   public async parseWebhookEvent(payload: any): Promise<NormalizedWebhookEvent> {
-    // Webhook parsing is planned for Phase 3; placeholder in Phase 2
-    throw new Error('Webhook parsing not implemented in Phase 2');
+    const paymentEntity = payload.payload?.payment?.entity;
+    if (!paymentEntity) {
+      throw new Error('Invalid webhook payload structure');
+    }
+
+    const gatewayOrderId = paymentEntity.order_id || null;
+    const gatewayPaymentId = paymentEntity.id || null;
+    const amount = paymentEntity.amount ? Number(paymentEntity.amount) : null;
+    const currency = paymentEntity.currency || null;
+
+    let status = PaymentStatus.PENDING_VERIFICATION;
+    if (payload.event === 'payment.captured') {
+      status = PaymentStatus.CAPTURED;
+    } else if (payload.event === 'payment.failed') {
+      status = PaymentStatus.FAILED;
+    }
+
+    return {
+      gatewayOrderId,
+      gatewayPaymentId,
+      status,
+      amount,
+      currency,
+      errorCode: paymentEntity.error_code || null,
+      errorMessage: paymentEntity.error_description || null,
+      rawEvent: payload
+    };
+  }
+
+  public async verifyPaymentSignature(orderId: string, paymentId: string, signature: string): Promise<boolean> {
+    try {
+      const secret = process.env.RAZORPAY_KEY_SECRET || 'dummy_secret';
+      const text = orderId + '|' + paymentId;
+      const generatedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(text)
+        .digest('hex');
+      return generatedSignature === signature;
+    } catch (err) {
+      return false;
+    }
   }
 
   /**
