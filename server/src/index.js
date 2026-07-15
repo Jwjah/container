@@ -1,3 +1,4 @@
+const originalPort = process.env.PORT;
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -79,7 +80,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = originalPort || process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
