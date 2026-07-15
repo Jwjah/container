@@ -43,7 +43,7 @@ export class PaymentService implements IPaymentService {
     const order = orders[0];
 
     // Security Check: Verify authenticated student owns the order
-    if (order.student_id !== dto.studentId) {
+    if (Number(order.student_id) !== Number(dto.studentId)) {
       throw new PaymentValidationError('Access Denied: You do not own this order');
     }
 
@@ -324,7 +324,7 @@ export class PaymentService implements IPaymentService {
       }
 
       // Ownership Check: Verify authenticated student owns the payment
-      if (payment.studentId !== studentId) {
+      if (Number(payment.studentId) !== Number(studentId)) {
         throw new PaymentValidationError('Access Denied: You do not own this payment session');
       }
 

@@ -73,7 +73,7 @@ export class OrderFinalizationService implements IOrderFinalizationService {
       if (order.status !== OrderStatus.PENDING_PAYMENT) {
         throw new Error(`Order in state ${order.status} is ineligible for payment finalization`);
       }
-      if (order.studentId !== payment.studentId) {
+      if (Number(order.studentId) !== Number(payment.studentId)) {
         throw new Error('Payment ownership mismatch');
       }
 
