@@ -108,7 +108,15 @@ export class PaymentService implements IPaymentService {
           conn.release();
         }
       } else {
-        // Block duplicate active sessions with different keys
+        // Active payment session is NOT stale. Return it so the user can complete payment.
+        if (activePayment.status === PaymentStatus.CREATED || activePayment.status === PaymentStatus.INITIATED) {
+          console.log(`[${correlationStr}] [PaymentService] Active session (ID: ${activePayment.id}) is valid and not stale. Returning for reuse.`);
+          if (activePayment.gatewayOrderId) {
+            return this.mapToResponseDTO(activePayment);
+          }
+          return this.createGatewayOrder(activePayment, correlationStr);
+        }
+        // Block duplicate active sessions with other states
         throw new PaymentValidationError('An active payment session is already in progress for this order');
       }
     }
