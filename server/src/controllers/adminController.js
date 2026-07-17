@@ -282,7 +282,11 @@ exports.wipeOperations = async (req, res) => {
           console.warn(`Wipe warning for table ${t}:`, e.message);
         }
       }
-      await db.execute('DELETE FROM notifications WHERE type = "order" OR type = "delivery"');
+      try {
+        await db.execute('DELETE FROM notifications WHERE type = "order" OR type = "delivery"');
+      } catch (e) {
+        console.warn('Wipe warning for notifications:', e.message);
+      }
       res.json({ message: 'All orders wiped' });
     } else if (target === 'all') {
       const tables = [

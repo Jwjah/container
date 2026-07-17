@@ -1308,8 +1308,8 @@ const migrate = async () => {
     `ALTER TABLE print_jobs ADD COLUMN cancelled_at TEXT DEFAULT NULL`,
     `ALTER TABLE print_jobs ADD COLUMN cancellation_reason_code TEXT DEFAULT NULL`,
     `ALTER TABLE print_jobs ADD COLUMN cancellation_description TEXT DEFAULT NULL`,
-    `ALTER TABLE orders ADD COLUMN order_id TEXT DEFAULT NULL`,
-    `ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'UNPAID'`
+    `ALTER TABLE orders ADD COLUMN order_id VARCHAR(255) DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID'`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { } // Ignore if column already exists
@@ -1339,7 +1339,13 @@ const migrate = async () => {
   }
 
   console.log('\n✅ All migrations complete!\n');
-  process.exit(0);
+  if (require.main === module) {
+    process.exit(0);
+  }
 };
 
-migrate();
+module.exports = migrate;
+
+if (require.main === module) {
+  migrate();
+}

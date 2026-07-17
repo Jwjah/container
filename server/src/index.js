@@ -81,8 +81,19 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = originalPort || process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
-  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   Client URL:  ${process.env.CLIENT_URL}\n`);
-});
+const migrate = require('./migrations/migrate');
+
+migrate()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
+      console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`   Client URL:  ${process.env.CLIENT_URL}\n`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ Failed to run database migrations during startup:', err);
+    app.listen(PORT, () => {
+      console.log(`\n🚀 CampusPrint API running on port ${PORT} (migrations failed)`);
+    });
+  });
