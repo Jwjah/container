@@ -101,6 +101,12 @@ class FooterRenderer {
     // 1. Draw Logo
     try {
       const logoPath = path.join(__dirname, '../assets/logo.jpg');
+	
+
+	console.log("PDF __dirname:", __dirname);
+	console.log("Logo path:", logoPath);
+	console.log("Logo exists:", fs.existsSync(logoPath));
+
       if (fs.existsSync(logoPath)) {
         let logoBytes = fs.readFileSync(logoPath);
         if (this.printType === 'bw') {
