@@ -77,6 +77,11 @@ export class OrderFinalizationService implements IOrderFinalizationService {
         throw new Error('Payment ownership mismatch');
       }
 
+      // Generate Human-Readable Order ID
+      const { generateOrderIdStr } = require('../../../utils/helpers');
+      const orderIdStr = await generateOrderIdStr(conn);
+      order.orderIdStr = orderIdStr;
+
       // 4. Mark paid via Domain Model method
       order.markPaid(payment.paymentReference!, payment.uuid, payment.gatewayPaymentId || '');
       await this.orderRepository.update(order, conn);
@@ -93,10 +98,72 @@ export class OrderFinalizationService implements IOrderFinalizationService {
       const printJobEntity = PrintJob.createFromOrder(order);
       const printJob = await this.printJobRepository.create(printJobEntity, conn);
 
-      // 7. Stage Generic Domain Event in Outbox Table
+      // 7a. Query order layout/pages details for ORDER_CREATED payload
+      const [orderRows] = await conn.execute(
+        'SELECT total_pages, layout, print_type FROM orders WHERE id = ?',
+        [order.id]
+      );
+      const orderRow = (orderRows as any[])[0] || { total_pages: 0, layout: 'single', print_type: 'bw' };
+
+      // 7b. Stage ORDER_CREATED outbox event
+      const orderCreatedPayload = {
+        orderId: order.id,
+        orderIdStr: order.orderIdStr,
+        shopId: order.shopId,
+        totalPrice: order.totalPrice,
+        pagesCount: orderRow.total_pages,
+        duplex: orderRow.layout === 'double',
+        color: orderRow.print_type === 'color',
+        paperSize: 'A4'
+      };
+      const orderCreatedEvent = new OutboxEvent(
+        null,
+        crypto.randomUUID(),
+        'ORDER_CREATED',
+        'ORDER',
+        String(order.id),
+        JSON.stringify(orderCreatedPayload),
+        OutboxEventStatus.PENDING,
+        0,
+        null,
+        correlationStr,
+        1,
+        new Date()
+      );
+      await this.outboxRepository.create(orderCreatedEvent, conn);
+
+      // 7c. Stage PAYMENT_CONFIRMED outbox event
+      const paymentConfirmedPayload = {
+        orderId: order.id,
+        orderIdStr: order.orderIdStr,
+        shopId: order.shopId,
+        userId: order.studentId,
+        amount: order.totalPrice,
+        paymentReference: payment.paymentReference,
+        gatewayPaymentId: payment.gatewayPaymentId,
+        invoiceNumber
+      };
+      const paymentConfirmedEvent = new OutboxEvent(
+        null,
+        crypto.randomUUID(),
+        'PAYMENT_CONFIRMED',
+        'PAYMENT',
+        String(order.id),
+        JSON.stringify(paymentConfirmedPayload),
+        OutboxEventStatus.PENDING,
+        0,
+        null,
+        correlationStr,
+        1,
+        new Date()
+      );
+      await this.outboxRepository.create(paymentConfirmedEvent, conn);
+
+      // 7d. Stage Generic Domain Event in Outbox Table (ORDER_FINALIZED)
       const eventPayload = {
         orderId: order.id,
         orderHash: order.orderHash,
+        orderIdStr: order.orderIdStr,
         studentId: order.studentId,
         shopId: order.shopId,
         totalPrice: order.totalPrice,

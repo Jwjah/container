@@ -56,7 +56,7 @@ export default function AgentEarningsPage() {
                         +
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700 }}>Order #{t.order_hash?.substring(0, 8)?.toUpperCase()}</div>
+                        <div style={{ fontWeight: 700 }}>Order #{t.order_id || t.order_hash?.substring(0, 8)?.toUpperCase()}</div>
                         <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{new Date(t.created_at).toLocaleDateString()}</div>
                       </div>
                     </div>

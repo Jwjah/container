@@ -48,7 +48,7 @@ const SEPARATOR_Y = Math.max(FOOTER_TOP_Y, qrY + QR_SIZE);
 const RESERVED_SPACE = SEPARATOR_Y + SEPARATOR_GAP;
 
 class FooterRenderer {
-  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw') {
+  constructor(page, pdfDoc, orderHash, orderId, pickupQr, deliveryQr, printType = 'bw', orderIdStr = null) {
     this.page = page;
     this.pdfDoc = pdfDoc;
     this.orderHash = orderHash;
@@ -56,6 +56,7 @@ class FooterRenderer {
     this.pickupQr = pickupQr;
     this.deliveryQr = deliveryQr;
     this.printType = printType;
+    this.orderIdStr = orderIdStr;
     
     const { width, height } = page.getSize();
     this.width = width;
@@ -389,10 +390,31 @@ class FooterRenderer {
     });
   }
 
+  drawCenterColumn() {
+    const text = this.orderIdStr || this.orderHash || 'N/A';
+    const isBw = this.printType === 'bw';
+    const orderIdColor = isBw ? rgb(0.1, 0.1, 0.1) : rgb(0.12, 0.12, 0.18);
+    const fontSize = 8.0;
+    
+    const textWidth = this.boldFont.widthOfTextAtSize(text, fontSize);
+    const centerX = this.width / 2;
+    const x = centerX - (textWidth / 2);
+    const y = FOOTER_BOTTOM_Y + 11.5;
+    
+    this.page.drawText(text, {
+      x: x,
+      y: y,
+      size: fontSize,
+      font: this.boldFont,
+      color: orderIdColor,
+    });
+  }
+
   async render() {
     this.drawBackground();
     this.drawSeparator();
     await this.drawLeftColumn();
+    this.drawCenterColumn();
     await this.drawRightColumn();
     this.drawVersioning();
     
@@ -407,7 +429,7 @@ class FooterRenderer {
  * on the last page. All positions and scaling are derived dynamically from the printer profile.
  * Supports 1-up, 2-up (vertical stack), and 4-up (2x2 grid) formatting in a single pass.
  */
-async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1) {
+async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, deliveryQrBase64, printType = 'bw', pagesPerSheet = 1, orderIdStr = null) {
   try {
     const srcDoc = await PDFDocument.load(pdfBuffer);
     const srcPages = srcDoc.getPages();
@@ -547,7 +569,8 @@ async function modifyPdf(pdfBuffer, orderHash, orderId, pickupQrBase64, delivery
       orderId,
       pickupQrBase64,
       deliveryQrBase64,
-      printType
+      printType,
+      orderIdStr
     );
     await renderer.loadFonts();
     await renderer.render();

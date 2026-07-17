@@ -3,36 +3,63 @@ const { sendPushToUser } = require('../../../services/pushService');
 
 export class NotificationConsumer {
   public async handleOrderFinalized(payload: any): Promise<void> {
-    const { studentId, shopId, orderId, totalPrice } = payload;
+    const { studentId, shopId, orderId, totalPrice, orderHash } = payload;
 
     console.log(`[NotificationConsumer] Processing confirmation notifications for Order #${orderId}`);
+
+    // Resolve order and user details dynamically
+    const [orderDetails] = await db.execute(
+      `SELECT o.order_id, o.order_hash, o.total_pages, o.copies, u.name as student_name, s.shop_name, s.user_id as manager_user_id
+       FROM orders o
+       JOIN users u ON o.student_id = u.id
+       JOIN shops s ON o.shop_id = s.id
+       WHERE o.id = ?`,
+      [orderId]
+    );
+
+    const detail = (orderDetails as any[])[0];
+    const displayOrderId = detail?.order_id || payload.orderIdStr || orderHash?.substring(0, 8).toUpperCase() || String(orderId);
+    const customerName = detail?.student_name || 'Student';
+    const totalPages = detail?.total_pages || 0;
+    const copies = detail?.copies || 1;
+    const shopName = detail?.shop_name || 'CampusPrint Shop';
 
     // 1. Send push to Student
     try {
       await sendPushToUser(studentId, {
         title: 'Order Confirmed',
-        message: `Your payment of ₹${totalPrice} was successful. Order #${orderId} has been sent to the print queue.`
+        message: `Your payment of ₹${totalPrice} was successful. Order #${displayOrderId} has been sent to the print queue.`
       });
     } catch (e: any) {
       console.error(`[NotificationConsumer] Failed to send push to student ${studentId}:`, e.message);
       throw e; // Propagate up so EventDispatcher aggregates it for outbox retry
     }
 
-    // 2. Resolve Shop owner user_id dynamically from shopId
-    const [shops] = await db.execute('SELECT user_id FROM shops WHERE id = ?', [shopId]);
-    if (shops && shops.length > 0) {
-      const managerUserId = shops[0].user_id;
+    // 2. Resolve Shop owner user_id dynamically from shopId and send detailed notifications
+    if (detail && detail.manager_user_id) {
+      const managerUserId = detail.manager_user_id;
+      const notifTitle = 'New Order Received';
+      const notifMessage = `Order:\n${displayOrderId}\n\nCustomer:\n${customerName}\n\n${totalPages} Pages\n${copies} Copies\n\nReady for printing.`;
+
+      // Insert database notification
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [managerUserId, notifTitle, notifMessage, 'order']
+      );
+
       try {
         await sendPushToUser(managerUserId, {
-          title: 'New Print Job Queued',
-          message: `New paid order #${orderId} is confirmed. Please review your queue.`
+          title: notifTitle,
+          message: notifMessage,
+          url: '/shop/queue',
+          tag: `order-${orderId}`
         });
       } catch (e: any) {
         console.error(`[NotificationConsumer] Failed to send push to shop owner ${managerUserId}:`, e.message);
         throw e; // Propagate up so EventDispatcher aggregates it for outbox retry
       }
     } else {
-      console.warn(`[NotificationConsumer] Shop not found for ID: ${shopId}`);
+      console.warn(`[NotificationConsumer] Shop details or owner user ID not found for Order ID: ${orderId}`);
     }
   }
 

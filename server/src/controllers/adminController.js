@@ -250,21 +250,76 @@ exports.cancelOrder = async (req, res) => {
 exports.wipeOperations = async (req, res) => {
   try {
     const { target } = req.body;
+    
     if (target === 'orders') {
-      await db.execute('DELETE FROM deliveries');
-      await db.execute('DELETE FROM order_files');
-      await db.execute('DELETE FROM orders');
+      const tables = [
+        'print_job_history',
+        'print_jobs',
+        'fulfillment_history',
+        'fulfillments',
+        'delivery_history',
+        'delivery_assignments',
+        'deliveries',
+        'invoices',
+        'invoice_sequence',
+        'payment_webhook_events',
+        'payments',
+        'outbox_events',
+        'processed_events',
+        'order_lifecycle_timeline_events',
+        'order_lifecycle_projections',
+        'dead_letter_events',
+        'scheduling_print_queue',
+        'scheduling_processed_events',
+        'order_files',
+        'orders',
+        'order_number_sequence'
+      ];
+      for (const t of tables) {
+        try {
+          await db.execute(`DELETE FROM ${t}`);
+        } catch (e) {
+          console.warn(`Wipe warning for table ${t}:`, e.message);
+        }
+      }
       await db.execute('DELETE FROM notifications WHERE type = "order" OR type = "delivery"');
       res.json({ message: 'All orders wiped' });
     } else if (target === 'all') {
-      // Order matters due to foreign keys
-      await db.execute('DELETE FROM notifications');
-      await db.execute('DELETE FROM deliveries');
-      await db.execute('DELETE FROM order_files');
-      await db.execute('DELETE FROM orders');
-      await db.execute('DELETE FROM shops');
-      await db.execute('DELETE FROM transactions');
-      await db.execute('DELETE FROM otp_codes');
+      const tables = [
+        'print_job_history',
+        'print_jobs',
+        'fulfillment_history',
+        'fulfillments',
+        'delivery_history',
+        'delivery_assignments',
+        'deliveries',
+        'invoices',
+        'invoice_sequence',
+        'payment_webhook_events',
+        'payments',
+        'outbox_events',
+        'processed_events',
+        'order_lifecycle_timeline_events',
+        'order_lifecycle_projections',
+        'dead_letter_events',
+        'scheduling_print_queue',
+        'scheduling_processed_events',
+        'order_files',
+        'orders',
+        'order_number_sequence',
+        'notifications',
+        'otp_codes',
+        'transactions',
+        'shops',
+        'push_subscriptions'
+      ];
+      for (const t of tables) {
+        try {
+          await db.execute(`DELETE FROM ${t}`);
+        } catch (e) {
+          console.warn(`Wipe warning for table ${t}:`, e.message);
+        }
+      }
       
       const adminEmail = process.env.ADMIN_EMAIL || 'abhishek@nits.ac.in';
       await db.execute("DELETE FROM users WHERE role != 'admin' AND email != ?", [adminEmail]);

@@ -192,7 +192,7 @@ async function runE2ETests() {
     assert(printJob !== null && printJob.status === PrintJobStatus.QUEUED, 'Print job queued');
 
     const outboxCount = await getOutboxCount();
-    assert(outboxCount === 1, 'Exactly one outbox event generated');
+    assert(outboxCount === 3, 'Exactly three outbox events generated');
   } catch (e: any) {
     console.error('Scenario 1 failed:', e);
     failed++;
@@ -803,11 +803,13 @@ async function runE2ETests() {
     await finalizationService.finalizeOrder(initRes.uuid);
 
     const claimed = await outboxRepository.claimBatch(10, 'e2e-worker');
-    assert(claimed.length === 1, 'Exactly one outbox event staged');
-    assert(claimed[0].eventType === 'ORDER_FINALIZED', 'Outbox event is ORDER_FINALIZED');
+    assert(claimed.length === 3, 'Exactly three outbox events staged');
+    assert(claimed[0].eventType === 'ORDER_CREATED', 'First outbox event is ORDER_CREATED');
+    assert(claimed[1].eventType === 'PAYMENT_CONFIRMED', 'Second outbox event is PAYMENT_CONFIRMED');
+    assert(claimed[2].eventType === 'ORDER_FINALIZED', 'Third outbox event is ORDER_FINALIZED');
 
     // Parse event payload
-    const payload = JSON.parse(claimed[0].payload);
+    const payload = JSON.parse(claimed[2].payload);
     assert(payload.orderId === orderId, 'Outbox event payload links correct orderId');
     assert(payload.studentId === STUDENT_ID, 'Outbox event payload links correct studentId');
   } catch (e: any) {

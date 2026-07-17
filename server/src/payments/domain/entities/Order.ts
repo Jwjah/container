@@ -12,7 +12,9 @@ export class Order {
     public paymentUuid: string | null = null,
     public gatewayPaymentId: string | null = null,
     public paidAt: Date | null = null,
-    public readonly createdAt: Date = new Date()
+    public readonly createdAt: Date = new Date(),
+    public orderIdStr: string | null = null,
+    public paymentStatus: string = 'UNPAID'
   ) {}
 
   public markPaid(paymentRef: string, paymentUuid: string, gatewayPaymentId: string): void {
@@ -23,6 +25,7 @@ export class Order {
       throw new Error(`Ineligible order status transition to PAID from ${this.status}`);
     }
     this.status = OrderStatus.PAID;
+    this.paymentStatus = 'PAID';
     this.paymentReference = paymentRef;
     this.paymentUuid = paymentUuid;
     this.gatewayPaymentId = gatewayPaymentId;

@@ -5,6 +5,7 @@ import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { StaggerContainer, StaggerItem, TapButton, ModalOverlay } from '@/components/animations';
+import { HiOutlineSearch } from 'react-icons/hi';
 
 const statusFlow = ['pending', 'confirmed', 'printing', 'ready', 'delivered'];
 const nextStatus: Record<string, string> = { pending: 'confirmed', confirmed: 'printing', printing: 'ready', ready: 'delivered' };
@@ -21,6 +22,7 @@ export default function QueuePage() {
   const [tab, setTab] = useState('pending');
   const [qrModalOrder, setQrModalOrder] = useState<any>(null);
   const [showAgentGuide, setShowAgentGuide] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     // Check if agent is set up or just show the option
@@ -56,14 +58,72 @@ export default function QueuePage() {
     }
   };
 
+  const handlePrintAll = async () => {
+    const printable = orders.filter(o => o.payment_status === 'PAID' && o.status === 'confirmed');
+    if (printable.length === 0) {
+      toast.error('No printable orders in the queue');
+      return;
+    }
 
-  const filteredOrders = orders.filter(o => o.status === tab);
+    setLoading(true);
+    try {
+      for (const order of printable) {
+        try {
+          await api.post(`/shops/${order.shop_id}/trigger-print`, { orderId: order.id });
+          toast.success(`Sent Order #${order.order_id || order.order_hash.substring(0, 8).toUpperCase()} to printer`);
+        } catch (err: any) {
+          const errorMsg = err.response?.data?.error || 'Unknown error';
+          toast.error(`Failed to print Order #${order.order_id || order.order_hash.substring(0, 8).toUpperCase()}: ${errorMsg}`);
+        }
+      }
+      loadOrders();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredOrders = orders
+    .filter(o => o.status === tab)
+    .filter(o => 
+      o.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.order_hash?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.student_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
   const counts = statusFlow.reduce((acc, s) => ({ ...acc, [s]: orders.filter(o => o.status === s).length }), {} as Record<string, number>);
+  const printableOrders = orders.filter(o => o.payment_status === 'PAID' && o.status === 'confirmed');
 
   return (
     <div>
       <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Print Queue</h1>
       <p style={{ color: 'var(--text-tertiary)', marginBottom: 24 }}>Manage incoming print orders in real-time.</p>
+
+      {/* Search & Actions Bar */}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <HiOutlineSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input 
+            type="text" 
+            className="input" 
+            style={{ paddingLeft: 36, width: '100%' }} 
+            placeholder="Search by Order ID or Student Name..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+        {printableOrders.length > 0 && (
+          <button
+            className="btn btn-primary"
+            disabled={loading}
+            onClick={handlePrintAll}
+            style={{ whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}
+          >
+            🖨️ Print All ({printableOrders.length})
+          </button>
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 24 }}>
@@ -105,7 +165,7 @@ export default function QueuePage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 15 }}>
-                        #{order.order_hash?.substring(0, 8)?.toUpperCase()}
+                        #{order.order_id || order.order_hash?.substring(0, 8)?.toUpperCase()}
                         <span className={`badge ${statusColors[order.status]}`} style={{ marginLeft: 12 }}>{statusLabels[order.status]}</span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>

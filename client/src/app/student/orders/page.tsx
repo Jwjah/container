@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { StaggerContainer, StaggerItem, HoverCard, ModalOverlay, TapButton } from '@/components/animations';
 import QRScanner from '@/components/QRScanner';
+import { HiOutlineSearch } from 'react-icons/hi';
 
 const statusSteps = ['pending', 'confirmed', 'printing', 'ready', 'out_for_delivery', 'delivered'];
 const statusLabels: Record<string, string> = {
@@ -41,6 +42,7 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<any>(null);
   const [scannerType, setScannerType] = useState<'shop' | 'agent' | null>(null);
   const [isPaying, setIsPaying] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handlePay = async (order: any) => {
     setIsPaying(true);
@@ -171,6 +173,21 @@ export default function OrdersPage() {
       <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>My Orders</h1>
       <p style={{ color: 'var(--text-tertiary)', fontSize: 15, marginBottom: 32 }}>Track all your print orders in one place.</p>
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <HiOutlineSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input 
+            type="text" 
+            className="input" 
+            style={{ paddingLeft: 36, width: '100%' }} 
+            placeholder="Search by Order ID or Shop..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100 }} />)}
@@ -183,7 +200,12 @@ export default function OrdersPage() {
         </div>
       ) : (
         <StaggerContainer style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {orders.map((order) => (
+          {orders.filter(o => 
+            !searchQuery ||
+            o.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            o.order_hash?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            o.shop_name?.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map((order) => (
             <StaggerItem key={order.id}>
               <HoverCard>
                 <motion.div
@@ -193,7 +215,7 @@ export default function OrdersPage() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div>
-                      <span style={{ fontWeight: 700, fontSize: 15 }}>#{order.order_hash?.substring(0, 8)?.toUpperCase()}</span>
+                      <span style={{ fontWeight: 700, fontSize: 15 }}>#{order.order_id || order.order_hash?.substring(0, 8)?.toUpperCase()}</span>
                       <span style={{ fontSize: 13, color: 'var(--text-tertiary)', marginLeft: 12 }}>{order.shop_name}</span>
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>{new Date(order.created_at).toLocaleString()}</div>
                     </div>
@@ -244,7 +266,7 @@ export default function OrdersPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 14 }}>
-              <div><span style={{ color: 'var(--text-tertiary)' }}>ID:</span> #{selected.order_hash?.substring(0, 8)?.toUpperCase()}</div>
+              <div><span style={{ color: 'var(--text-tertiary)' }}>ID:</span> #{selected.order_id || selected.order_hash?.substring(0, 8)?.toUpperCase()}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Date:</span> {new Date(selected.created_at).toLocaleString()}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Shop:</span> {selected.shop_name}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Pages:</span> {selected.total_pages}</div>

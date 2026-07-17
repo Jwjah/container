@@ -52,6 +52,7 @@ export class FulfillmentModule {
     const deliveryAgentAssignedListener = new DeliveryAgentAssignedListener(service);
 
     // 4. Register Listeners to EventDispatcher
+    dispatcher.register('ORDER_FINALIZED', (payload) => notificationConsumer.handleOrderFinalized(payload));
     dispatcher.register('PRINT_READY', (payload) => printReadyListener.handle(payload));
     dispatcher.register('FULFILLMENT_ASSIGNED', (payload) => notificationConsumer.handleFulfillmentAssigned(payload));
     dispatcher.register('FULFILLMENT_STARTED', (payload) => notificationConsumer.handleFulfillmentStarted(payload));

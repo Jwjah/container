@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { StaggerContainer, StaggerItem, HoverCard } from '@/components/animations';
-import { HiOutlineClock, HiOutlineCheckCircle, HiOutlineCurrencyDollar, HiOutlineLocationMarker } from 'react-icons/hi';
+import { HiOutlineClock, HiOutlineCheckCircle, HiOutlineTrendingUp, HiOutlineSearch, HiOutlineCurrencyDollar, HiOutlineLocationMarker } from 'react-icons/hi';
 
 export default function AgentHistoryPage() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     api.get('/agent/earnings').then(({ data }) => {
@@ -20,6 +21,21 @@ export default function AgentHistoryPage() {
     <div>
       <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Delivery History 🕒</h1>
       <p style={{ color: 'var(--text-tertiary)', marginBottom: 32 }}>Your successfully completed deliveries and earnings.</p>
+
+      {/* Search Bar */}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <HiOutlineSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input 
+            type="text" 
+            className="input" 
+            style={{ paddingLeft: 36, width: '100%' }} 
+            placeholder="Search by Order ID or Shop..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
 
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -33,7 +49,13 @@ export default function AgentHistoryPage() {
         </div>
       ) : (
         <StaggerContainer style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {history.map(h => (
+          {history.filter(h => 
+            !searchQuery ||
+            h.order_id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.order_hash?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.shop_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            h.student_name?.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map(h => (
             <StaggerItem key={h.delivery_id}>
               <HoverCard className="glass-card" style={{ padding: 24 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -42,7 +64,7 @@ export default function AgentHistoryPage() {
                       <HiOutlineCheckCircle size={24} />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: 15, fontWeight: 700 }}>Order #{h.order_hash?.substring(0, 8)?.toUpperCase()}</h3>
+                      <h3 style={{ fontSize: 15, fontWeight: 700 }}>Order #{h.order_id || h.order_hash?.substring(0, 8)?.toUpperCase()}</h3>
                       <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{new Date(h.delivery_time || h.updated_at).toLocaleString()}</div>
                     </div>
                   </div>

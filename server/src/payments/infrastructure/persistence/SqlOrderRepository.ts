@@ -16,7 +16,9 @@ export class SqlOrderRepository implements IOrderRepository {
       row.payment_uuid,
       row.gateway_payment_id,
       row.paid_at ? new Date(row.paid_at) : null,
-      new Date(row.created_at)
+      new Date(row.created_at),
+      row.order_id || null,
+      row.payment_status || 'UNPAID'
     );
   }
 
@@ -52,6 +54,8 @@ export class SqlOrderRepository implements IOrderRepository {
         payment_uuid = ?, 
         gateway_payment_id = ?, 
         paid_at = ?, 
+        order_id = ?,
+        payment_status = ?,
         updated_at = CURRENT_TIMESTAMP 
        WHERE id = ?`,
       [
@@ -60,6 +64,8 @@ export class SqlOrderRepository implements IOrderRepository {
         order.paymentUuid,
         order.gatewayPaymentId,
         paidAtStr,
+        order.orderIdStr,
+        order.paymentStatus,
         order.id
       ]
     );

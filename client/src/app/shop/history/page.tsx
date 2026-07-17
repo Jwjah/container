@@ -93,7 +93,7 @@ export default function ShopHistoryPage() {
               >
                 <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>#{order.order_hash?.substring(0, 8)?.toUpperCase()}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>#{order.order_id || order.order_hash?.substring(0, 8)?.toUpperCase()}</div>
                     <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
                       {new Date(order.created_at).toLocaleString()}
                     </div>
@@ -122,7 +122,7 @@ export default function ShopHistoryPage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, fontSize: 14, marginBottom: 24 }}>
-              <div><span style={{ color: 'var(--text-tertiary)' }}>Order ID:</span> #{selected.order_hash?.toUpperCase()}</div>
+              <div><span style={{ color: 'var(--text-tertiary)' }}>Order ID:</span> #{selected.order_id || selected.order_hash?.toUpperCase()}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Date:</span> {new Date(selected.created_at).toLocaleString()}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Student:</span> {selected.student_name}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Location:</span> {selected.hostel} {selected.room_number}</div>

@@ -126,7 +126,7 @@ export default function StudentDashboard() {
                         </div>
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>
-                            #{order.order_hash?.substring(0, 8)?.toUpperCase()}
+                            #{order.order_id || order.order_hash?.substring(0, 8)?.toUpperCase()}
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                             {order.shop_name || 'Shop'} · {order.total_pages} pages · ₹{parseFloat(order.total_price || 0).toFixed(0)}

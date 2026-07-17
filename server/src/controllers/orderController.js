@@ -75,14 +75,15 @@ exports.createOrder = async (req, res) => {
 
     // Create order
     const [result] = await db.execute(
-      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderHash, req.user.id, shop_id,
         print_type || 'bw', layout || 'single', parseInt(copies) || 1,
         binding === 'true' || binding === true ? 1 : 0,
         delivery_type || 'pickup', hostel_address || null,
         totalPages, totalPrice, deliveryFee, notes || null,
+        'UNPAID', 'pending'
       ]
     );
 
@@ -115,18 +116,6 @@ exports.createOrder = async (req, res) => {
     }
     await db.execute('UPDATE orders SET pickup_qr = ?, delivery_qr = ? WHERE id = ?', [pickupQR, deliveryQR, orderId]);
 
-    // Create notification for shop
-    await db.execute(
-      'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-      [shop.user_id, '🆕 New Order', `New print order #${orderHash.substring(0, 8).toUpperCase()} received`, 'order']
-    );
-    await sendPushToUser(shop.user_id, {
-      title: '🆕 New Order',
-      message: `New print order #${orderHash.substring(0, 8).toUpperCase()} received`,
-      url: '/shop/queue',
-      tag: `order-${orderId}`,
-    });
-
     res.status(201).json({
       message: 'Order placed successfully',
       order: {
@@ -148,7 +137,7 @@ exports.createOrder = async (req, res) => {
 exports.getOrders = async (req, res) => {
   try {
     const { role, id } = req.user;
-    const { status, startDate, endDate } = req.query;
+    const { status, startDate, endDate, search } = req.query;
     let query, params = [];
 
     let whereClause = '';
@@ -157,6 +146,10 @@ exports.getOrders = async (req, res) => {
     if (endDate) { whereClause += ' AND o.created_at <= ?'; params.push(endDate); }
 
     if (role === 'student') {
+      if (search) {
+        whereClause += ' AND (o.order_hash LIKE ? OR o.order_id LIKE ? OR s.shop_name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      }
       query = `SELECT o.*, s.shop_name, 
                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.original_name, 'pages', f.page_count, 'size', f.file_size)) 
                  FROM order_files f WHERE f.order_id = o.id) as files
@@ -165,23 +158,41 @@ exports.getOrders = async (req, res) => {
     } else if (role === 'shop') {
       const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [id]);
       if (!shops.length) return res.json({ orders: [] });
+      if (search) {
+        whereClause += ' AND (o.order_hash LIKE ? OR o.order_id LIKE ? OR u.name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      }
       query = `SELECT o.*, u.name as student_name, u.hostel, u.room_number,
                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.original_name, 'pages', f.page_count, 'path', f.file_path)) 
                  FROM order_files f WHERE f.order_id = o.id) as files
-               FROM orders o JOIN users u ON o.student_id = u.id WHERE o.shop_id = ? ${whereClause} ORDER BY o.created_at DESC`;
+               FROM orders o JOIN users u ON o.student_id = u.id 
+               WHERE o.shop_id = ? AND o.payment_status = 'PAID' AND o.status != 'cancelled' ${whereClause} 
+               ORDER BY o.created_at DESC`;
       params.unshift(shops[0].id);
     } else if (role === 'agent') {
+      if (search) {
+        whereClause += ' AND (o.order_hash LIKE ? OR o.order_id LIKE ? OR u.name LIKE ? OR s.shop_name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      }
       query = `SELECT o.*, s.shop_name, s.location as shop_location, u.name as student_name, u.hostel, u.room_number
                FROM orders o JOIN shops s ON o.shop_id = s.id JOIN users u ON o.student_id = u.id
                WHERE o.agent_id = ? ${whereClause} ORDER BY o.created_at DESC`;
       params.unshift(id);
     } else if (role === 'admin') {
+      if (search) {
+        whereClause += ' AND (o.order_hash LIKE ? OR o.order_id LIKE ? OR u.name LIKE ? OR s.shop_name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      }
       query = `SELECT o.*, s.shop_name, u.name as student_name,
                 (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', f.id, 'name', f.original_name, 'pages', f.page_count, 'size', f.file_size)) 
                  FROM order_files f WHERE f.order_id = o.id) as files
                FROM orders o JOIN shops s ON o.shop_id = s.id JOIN users u ON o.student_id = u.id 
                WHERE 1=1 ${whereClause} ORDER BY o.created_at DESC LIMIT 100`;
     } else {
+      if (search) {
+        whereClause += ' AND (o.order_hash LIKE ? OR o.order_id LIKE ? OR u.name LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      }
       query = `SELECT o.*, s.shop_name, u.name as student_name 
                FROM orders o JOIN shops s ON o.shop_id = s.id JOIN users u ON o.student_id = u.id 
                WHERE 1=1 ${whereClause} ORDER BY o.created_at DESC LIMIT 100`;
@@ -220,7 +231,21 @@ exports.getOrder = async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    res.json({ order: orders[0] });
+    const order = orders[0];
+
+    // Shop security check:
+    if (req.user.role === 'shop') {
+      const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
+      if (!shops.length || shops[0].id !== order.shop_id) {
+        return res.status(403).json({ error: 'Unauthorized to access this order' });
+      }
+      // Check if order is eligible for production (not unpaid/pending)
+      if (order.payment_status !== 'PAID' && order.status !== 'confirmed') {
+        return res.status(404).json({ error: 'Order not found' }); // Hide existence
+      }
+    }
+
+    res.json({ order });
   } catch (err) {
     console.error('Get order error:', err);
     res.status(500).json({ error: 'Failed to fetch order' });
@@ -588,7 +613,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.pickup_qr, o.delivery_qr, o.print_type, o.notes 
+      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -601,6 +626,20 @@ exports.downloadPrintPdf = async (req, res) => {
 
     const file = files[0];
     
+    // Shop security check for downloading PDF:
+    if (req.user.role === 'shop') {
+      const [shops] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
+      if (!shops.length || shops[0].id !== file.shop_id) {
+        return res.status(403).json({ error: 'Unauthorized to download this file' });
+      }
+      // Retrieve order paid status
+      const [orderRows] = await db.execute('SELECT status, payment_status FROM orders WHERE id = ?', [file.order_id]);
+      const order = orderRows[0];
+      if (!order || (order.payment_status !== 'PAID' && order.status !== 'confirmed')) {
+        return res.status(403).json({ error: 'Order is not paid or confirmed' });
+      }
+    }
+
     // Download original PDF from Cloudinary URL
     const axios = require('axios');
     let pdfBuffer;
@@ -638,7 +677,8 @@ exports.downloadPrintPdf = async (req, res) => {
         file.pickup_qr,
         file.delivery_qr,
         file.print_type,
-        pagesPerSheet
+        pagesPerSheet,
+        file.order_id
       );
     } catch (processErr) {
       console.error('PDF modifications failed, sending original:', processErr.message);

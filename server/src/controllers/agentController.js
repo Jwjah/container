@@ -110,7 +110,7 @@ exports.getActiveMissions = async (req, res) => {
     const [missions] = await db.execute(
       `SELECT 
               d.id as delivery_id, d.order_id, d.agent_id, d.status, d.pickup_verified, d.dropoff_verified, d.earnings,
-              o.id as order_id, o.order_hash, o.delivery_type, o.hostel_address, o.pickup_qr, o.delivery_qr, o.total_price,
+              o.id as order_id, o.order_hash, o.order_id as order_id_str, o.delivery_type, o.hostel_address, o.pickup_qr, o.delivery_qr, o.total_price,
               s.shop_name, s.location as shop_location,
               u.name as student_name, u.hostel, u.room_number, u.phone as student_phone
        FROM deliveries d

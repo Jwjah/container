@@ -146,12 +146,14 @@ async function runTests() {
     assert.ok(printJob, 'Print job queued in DB');
     assert.strictEqual(printJob.status, PrintJobStatus.QUEUED, 'Print job status is QUEUED');
 
-    // Verify Outbox Event created
+    // Verify Outbox Events created
     const claimed = await outboxRepository.claimBatch(10, 'initial-worker');
-    assert.strictEqual(claimed.length, 1, 'One outbox event queued');
-    assert.strictEqual(claimed[0].eventType, 'ORDER_FINALIZED', 'Event type is ORDER_FINALIZED');
-    assert.strictEqual(claimed[0].correlationId, cid.value, 'Persisted correct correlation ID');
-    assert.strictEqual(claimed[0].eventVersion, 1, 'Persisted event version metadata');
+    assert.strictEqual(claimed.length, 3, 'Three outbox events queued');
+    assert.strictEqual(claimed[0].eventType, 'ORDER_CREATED', 'First event type is ORDER_CREATED');
+    assert.strictEqual(claimed[1].eventType, 'PAYMENT_CONFIRMED', 'Second event type is PAYMENT_CONFIRMED');
+    assert.strictEqual(claimed[2].eventType, 'ORDER_FINALIZED', 'Third event type is ORDER_FINALIZED');
+    assert.strictEqual(claimed[2].correlationId, cid.value, 'Persisted correct correlation ID');
+    assert.strictEqual(claimed[2].eventVersion, 1, 'Persisted event version metadata');
 
     console.log('  ✅ [PASS] Successfully transitioned order, generated invoice, queued print job, and staged outbox event.');
     passed++;

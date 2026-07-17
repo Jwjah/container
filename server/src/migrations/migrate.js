@@ -176,6 +176,10 @@ const migrate = async () => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       stub CHAR(1) NOT NULL UNIQUE
     )`,
+    `CREATE TABLE IF NOT EXISTS order_number_sequence (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      stub CHAR(1) NOT NULL UNIQUE
+    )`,
     `CREATE TABLE IF NOT EXISTS invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       uuid TEXT NOT NULL UNIQUE,
@@ -813,6 +817,10 @@ const migrate = async () => {
       id INT AUTO_INCREMENT PRIMARY KEY,
       stub CHAR(1) NOT NULL UNIQUE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS order_number_sequence (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      stub CHAR(1) NOT NULL UNIQUE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     `CREATE TABLE IF NOT EXISTS invoices (
       id INT AUTO_INCREMENT PRIMARY KEY,
       uuid VARCHAR(36) NOT NULL UNIQUE,
@@ -1299,7 +1307,9 @@ const migrate = async () => {
     `ALTER TABLE print_jobs ADD COLUMN ready_at TEXT DEFAULT NULL`,
     `ALTER TABLE print_jobs ADD COLUMN cancelled_at TEXT DEFAULT NULL`,
     `ALTER TABLE print_jobs ADD COLUMN cancellation_reason_code TEXT DEFAULT NULL`,
-    `ALTER TABLE print_jobs ADD COLUMN cancellation_description TEXT DEFAULT NULL`
+    `ALTER TABLE print_jobs ADD COLUMN cancellation_description TEXT DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN order_id TEXT DEFAULT NULL`,
+    `ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'UNPAID'`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { } // Ignore if column already exists

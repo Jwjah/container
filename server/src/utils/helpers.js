@@ -10,6 +10,27 @@ const generateOrderHash = (orderId, userId) => {
 };
 
 /**
+ * Generate a unique human-readable chronological sequential Order ID
+ */
+const generateOrderIdStr = async (connection) => {
+  const db = require('../config/database');
+  const executor = connection || db;
+  const [result] = await executor.execute("REPLACE INTO order_number_sequence (stub) VALUES ('a')");
+  const nextSeq = result.insertId || result.lastID;
+  const suffix = String(nextSeq).padStart(6, '0');
+  
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  return `CP-${year}${month}${day}-${hours}${minutes}${seconds}-${suffix}`;
+};
+
+/**
  * Generate QR code as data URL
  */
 const generateQRCode = async (payload) => {
@@ -44,4 +65,4 @@ const calculatePrice = ({ pages, copies, printType, layout, binding, shop }) => 
   };
 };
 
-module.exports = { generateOrderHash, generateQRCode, generateOTP, calculatePrice };
+module.exports = { generateOrderHash, generateOrderIdStr, generateQRCode, generateOTP, calculatePrice };

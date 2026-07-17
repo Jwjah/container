@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { StaggerContainer, StaggerItem, HoverCard, PulseDot } from '@/components/animations';
-import { HiOutlineTruck, HiOutlineCurrencyDollar, HiOutlineCheckCircle, HiOutlineLightningBolt, HiOutlineX } from 'react-icons/hi';
+import { HiOutlineTruck, HiOutlineCurrencyDollar, HiOutlineCheckCircle, HiOutlineLightningBolt, HiOutlineX, HiOutlineSearch } from 'react-icons/hi';
 import QRScanner from '@/components/QRScanner';
 
 export default function AgentDashboard() {
@@ -15,6 +15,7 @@ export default function AgentDashboard() {
   const [qrModalMission, setQrModalMission] = useState<any>(null);
   const [pickupQrMission, setPickupQrMission] = useState<any>(null);
   const [scannerOpen, setScannerOpen] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadData = (background = false) => {
     if (!background) setLoading(true);
@@ -99,6 +100,19 @@ export default function AgentDashboard() {
       </StaggerContainer>
 
       <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Active Missions</h2>
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <HiOutlineSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input 
+            type="text" 
+            className="input" 
+            style={{ paddingLeft: 36, width: '100%' }} 
+            placeholder="Search missions by Order ID..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[1, 2].map(i => <div key={i} className="skeleton" style={{ height: 100 }} />)}
@@ -111,12 +125,18 @@ export default function AgentDashboard() {
         </div>
       ) : (
         <StaggerContainer style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {missions.map((m, idx) => (
+          {missions.filter(m => 
+            !searchQuery ||
+            m.order_id_str?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.order_hash?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.shop_name?.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map((m, idx) => (
             <StaggerItem key={m.delivery_id || `mission-${idx}`}>
               <HoverCard className="glass-card" style={{ padding: 20 }}>
                 {/* Header: order hash + status badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ fontWeight: 700, fontSize: 16 }}>#{m.order_hash?.substring(0, 8)?.toUpperCase()}</span>
+                  <span style={{ fontWeight: 700, fontSize: 16 }}>#{m.order_id_str || m.order_hash?.substring(0, 8)?.toUpperCase()}</span>
                   <span className={`badge ${m.status === 'assigned' ? 'badge-pending' : m.status === 'picked_up' ? 'badge-printing' : 'badge-out_for_delivery'}`}>
                     {m.status?.replace(/_/g, ' ')}
                   </span>

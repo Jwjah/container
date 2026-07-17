@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { StaggerContainer, StaggerItem, HoverCard, TapButton } from '@/components/animations';
+import { HiOutlineSearch } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 
 export default function AgentMissionsPage() {
   const [missions, setMissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const loadMissions = (background = false) => {
     if (!background) setLoading(true);
@@ -34,18 +36,39 @@ export default function AgentMissionsPage() {
       <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>My Missions 🚚</h1>
       <p style={{ color: 'var(--text-tertiary)', marginBottom: 32 }}>Manage your currently accepted deliveries.</p>
 
+      {/* Search Bar */}
+      <div style={{ marginBottom: 24, display: 'flex', gap: 12 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <HiOutlineSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input 
+            type="text" 
+            className="input" 
+            style={{ paddingLeft: 36, width: '100%' }} 
+            placeholder="Search missions by Order ID..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[1, 2].map(i => <div key={i} className="skeleton" style={{ height: 140 }} />)}</div>
       ) : missions.length === 0 ? (
         <div className="glass-card empty-state"><h3>No active missions</h3><p>Accept gigs from the Radar to get started.</p></div>
       ) : (
         <StaggerContainer style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {missions.map(m => (
+          {missions.filter(m => 
+            !searchQuery ||
+            m.order_id_str?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.order_hash?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.student_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            m.shop_name?.toLowerCase().includes(searchQuery.toLowerCase())
+          ).map(m => (
             <StaggerItem key={m.delivery_id}>
               <HoverCard className="glass-card" style={{ padding: 24, borderLeft: `4px solid ${m.status === 'assigned' ? 'var(--warning)' : 'var(--primary)'}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Order #{m.order_hash?.substring(0, 8)?.toUpperCase()}</h3>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Order #{m.order_id_str || m.order_hash?.substring(0, 8)?.toUpperCase()}</h3>
                     <span className={`badge ${m.status === 'assigned' ? 'badge-pending' : m.status === 'picked_up' ? 'badge-printing' : 'badge-out_for_delivery'}`}>
                       {m.status?.replace(/_/g, ' ')}
                     </span>
