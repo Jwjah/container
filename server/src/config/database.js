@@ -150,7 +150,7 @@ if (USE_SQLITE) {
   };
 } else {
   const mysql = require('mysql2/promise');
-  db = mysql.createPool({
+  const pool = mysql.createPool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT || 3306,
     user: process.env.DB_USER,
@@ -165,25 +165,55 @@ if (USE_SQLITE) {
     }
   });
 
-  db.getConnection()
+  db = Object.assign(Object.create(pool), {
+    execute: async (query, params) => {
+      try {
+        return await pool.execute(query, params);
+      } catch (err) {
+        if (err.message.includes('Incorrect arguments to mysqld_stmt_execute') || (typeof query === 'string' && query.toUpperCase().includes('LIMIT'))) {
+          return await pool.query(query, params);
+        }
+        throw err;
+      }
+    },
+    query: async (query, params) => {
+      return await pool.query(query, params);
+    },
+    getConnection: async () => {
+      const conn = await pool.getConnection();
+      const origExecute = conn.execute;
+      const origQuery = conn.query;
+      conn.execute = async (query, params) => {
+        try {
+          return await origExecute.call(conn, query, params);
+        } catch (err) {
+          if (err.message.includes('Incorrect arguments to mysqld_stmt_execute') || (typeof query === 'string' && query.toUpperCase().includes('LIMIT'))) {
+            return await origQuery.call(conn, query, params);
+          }
+          throw err;
+        }
+      };
+      return conn;
+    },
+    transaction: async (callback) => {
+      const conn = await db.getConnection();
+      try {
+        await conn.beginTransaction();
+        const result = await callback(conn);
+        await conn.commit();
+        return result;
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      } finally {
+        conn.release();
+      }
+    }
+  });
+
+  pool.getConnection()
     .then(conn => { console.log('✅ MySQL connected'); conn.release(); })
     .catch(err => console.error('❌ MySQL failed:', err.message));
-
-  // Add identical transaction runner on MySQL pool instance
-  db.transaction = async (callback) => {
-    const conn = await db.getConnection();
-    try {
-      await conn.beginTransaction();
-      const result = await callback(conn);
-      await conn.commit();
-      return result;
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
-  };
 }
 
 module.exports = db;
