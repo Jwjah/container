@@ -134,7 +134,6 @@ export default function NewOrderPage() {
             router.push('/student/orders');
           } catch (err: any) {
             toast.error(err.response?.data?.error || 'Payment verification failed');
-            router.push('/student/orders');
           } finally {
             setLoading(false);
           }

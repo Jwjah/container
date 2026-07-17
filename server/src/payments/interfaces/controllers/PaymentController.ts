@@ -119,11 +119,7 @@ export class PaymentController {
       const verificationResponse = await this.paymentService.verifyPayment(dto, student.id, cid);
 
       if (verificationResponse.status === 'CAPTURED') {
-        try {
-          await this.finalizationService.finalizeOrder(paymentUuid, cid);
-        } catch (finalizeErr: any) {
-          console.error(`[${cid.value}] [PaymentController] Warning: Order finalization failed on client callback. Webhook reconciliation will retry. Error:`, finalizeErr.message);
-        }
+        await this.finalizationService.finalizeOrder(paymentUuid, cid);
       }
 
       res.status(200).json({
