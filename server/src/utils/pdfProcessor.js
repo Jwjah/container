@@ -100,7 +100,8 @@ class FooterRenderer {
     
     // 1. Draw Logo
     try {
-      const logoPath = path.join(__dirname, 'src/assets/logo.jpg');
+	const logoPath = path.resolve(process.cwd(), "src", "assets", "logo.jpg");
+      
 	
 
 	console.log("cwd:", process.cwd());

@@ -6,7 +6,7 @@
     "dev": "nodemon src/index.js",
     "dev:ts": "nodemon --watch src -e ts,js --exec ts-node src/index.js",
     "start": "node dist/index.js",
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/assets && cp -R src/assets/* dist/assets/",
     "migrate": "node src/migrations/migrate.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
