@@ -30,13 +30,14 @@ export class SqlPrintJobRepository implements IPrintJobRepository {
 
   public async create(job: PrintJob, connection?: any): Promise<PrintJob> {
     const executor = connection || db;
-    const lastStatusChangedStr = job.lastStatusChangedAt ? job.lastStatusChangedAt.toISOString() : null;
-    const acceptedStr = job.acceptedAt ? job.acceptedAt.toISOString() : null;
-    const printingStartedStr = job.printingStartedAt ? job.printingStartedAt.toISOString() : null;
-    const readyStr = job.readyAt ? job.readyAt.toISOString() : null;
-    const cancelledStr = job.cancelledAt ? job.cancelledAt.toISOString() : null;
-    const completedStr = job.completedAt ? job.completedAt.toISOString() : null;
-    const estimatedStr = job.estimatedCompletionAt ? job.estimatedCompletionAt.toISOString() : null;
+    const toSqlDate = (d: Date | null | undefined): string | null => d ? d.toISOString().slice(0, 19).replace('T', ' ') : null;
+    const lastStatusChangedStr = toSqlDate(job.lastStatusChangedAt);
+    const acceptedStr = toSqlDate(job.acceptedAt);
+    const printingStartedStr = toSqlDate(job.printingStartedAt);
+    const readyStr = toSqlDate(job.readyAt);
+    const cancelledStr = toSqlDate(job.cancelledAt);
+    const completedStr = toSqlDate(job.completedAt);
+    const estimatedStr = toSqlDate(job.estimatedCompletionAt);
 
     const [result] = await executor.execute(
       `INSERT INTO print_jobs (
@@ -135,13 +136,14 @@ export class SqlPrintJobRepository implements IPrintJobRepository {
   public async update(printJob: PrintJob, connection?: any): Promise<void> {
     const executor = connection || db;
     
-    const lastStatusChangedStr = printJob.lastStatusChangedAt ? printJob.lastStatusChangedAt.toISOString() : null;
-    const acceptedStr = printJob.acceptedAt ? printJob.acceptedAt.toISOString() : null;
-    const printingStartedStr = printJob.printingStartedAt ? printJob.printingStartedAt.toISOString() : null;
-    const readyStr = printJob.readyAt ? printJob.readyAt.toISOString() : null;
-    const cancelledStr = printJob.cancelledAt ? printJob.cancelledAt.toISOString() : null;
-    const completedStr = printJob.completedAt ? printJob.completedAt.toISOString() : null;
-    const estimatedStr = printJob.estimatedCompletionAt ? printJob.estimatedCompletionAt.toISOString() : null;
+    const toSqlDate = (d: Date | null | undefined): string | null => d ? d.toISOString().slice(0, 19).replace('T', ' ') : null;
+    const lastStatusChangedStr = toSqlDate(printJob.lastStatusChangedAt);
+    const acceptedStr = toSqlDate(printJob.acceptedAt);
+    const printingStartedStr = toSqlDate(printJob.printingStartedAt);
+    const readyStr = toSqlDate(printJob.readyAt);
+    const cancelledStr = toSqlDate(printJob.cancelledAt);
+    const completedStr = toSqlDate(printJob.completedAt);
+    const estimatedStr = toSqlDate(printJob.estimatedCompletionAt);
 
     const nextVersion = printJob.version + 1;
 
