@@ -103,7 +103,7 @@ class FooterRenderer {
       const logoPath = path.join(__dirname, 'src/assets/logo.jpg');
 	
 
-	console.log("cwd:", process.cwd();
+	console.log("cwd:", process.cwd());
 	console.log("Logo path:", logoPath);
 	console.log("Logo exists:", fs.existsSync(logoPath));
 
