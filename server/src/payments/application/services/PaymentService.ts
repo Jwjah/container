@@ -82,6 +82,101 @@ export class PaymentService implements IPaymentService {
         return this.createGatewayOrder(activePayment, correlationStr);
       }
 
+      // Self-heal: If the payment is already CAPTURED but the order is still pending, finalize the order!
+      if (activePayment.status === PaymentStatus.CAPTURED) {
+        console.log(`[${correlationStr}] [PaymentService] Self-healing order #${dto.orderId} (payment is CAPTURED but order is pending)`);
+        const conn = await db.getConnection();
+        try {
+          await conn.beginTransaction();
+
+          // Generate sequential Order ID
+          const { generateOrderIdStr } = require('../../../utils/helpers');
+          const orderIdStr = await generateOrderIdStr(conn);
+
+          // Update order
+          await conn.execute(
+            `UPDATE orders SET status = ?, payment_status = ?, order_id = ?, paid_at = CURRENT_TIMESTAMP, 
+             payment_reference = ?, payment_uuid = ?, gateway_payment_id = ? WHERE id = ?`,
+            ['confirmed', 'PAID', orderIdStr, activePayment.paymentReference, activePayment.uuid, activePayment.gatewayPaymentId, dto.orderId]
+          );
+
+          // Generate invoice sequence
+          const [seqRows]: any = await conn.execute("REPLACE INTO invoice_sequence (stub) VALUES ('a')");
+          const nextSeq = seqRows.insertId || seqRows.lastID;
+          const invoiceNumber = `INV-${new Date().getFullYear()}-${String(nextSeq).padStart(6, '0')}`;
+          const invoiceUuid = randomUUID();
+
+          // Create invoice
+          await conn.execute(
+            `INSERT INTO invoices (uuid, invoice_number, student_id, shop_id, order_id, order_hash, payment_uuid, payment_reference, gateway_payment_id, status, subtotal, tax_amount, total)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [invoiceUuid, invoiceNumber, order.student_id, order.shop_id, dto.orderId, order.order_hash, activePayment.uuid, activePayment.paymentReference, activePayment.gatewayPaymentId, 'PAID', order.total_price, 0.00, order.total_price]
+          );
+
+          // Create print job
+          await conn.execute(
+            `INSERT INTO print_jobs (order_id, shop_id, student_id, status, priority, version, last_status_changed_at, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+            [dto.orderId, order.shop_id, order.student_id, 'queued', 0, 1]
+          );
+
+          // Stage outbox events
+          const orderCreatedPayload = {
+            orderId: dto.orderId,
+            orderIdStr,
+            shopId: order.shop_id,
+            totalPrice: order.total_price,
+            pagesCount: order.total_pages,
+            duplex: order.layout === 'double',
+            color: order.print_type === 'color',
+            paperSize: 'A4'
+          };
+          await conn.execute(
+            `INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, payload, status, retry_count, correlation_id, event_version, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [randomUUID(), 'ORDER_CREATED', 'ORDER', String(dto.orderId), JSON.stringify(orderCreatedPayload), 'PENDING', 0, correlationStr, 1]
+          );
+
+          const paymentConfirmedPayload = {
+            orderId: dto.orderId,
+            orderIdStr,
+            shopId: order.shop_id,
+            userId: order.student_id,
+            amount: computedAmount,
+            gateway: 'RAZORPAY',
+            reference: activePayment.paymentReference
+          };
+          await conn.execute(
+            `INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, payload, status, retry_count, correlation_id, event_version, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [randomUUID(), 'PAYMENT_CONFIRMED', 'PAYMENT', String(dto.orderId), JSON.stringify(paymentConfirmedPayload), 'PENDING', 0, correlationStr, 1]
+          );
+
+          const orderFinalizedPayload = {
+            orderId: dto.orderId,
+            orderIdStr,
+            invoiceNumber,
+            paymentStatus: 'CAPTURED'
+          };
+          await conn.execute(
+            `INSERT INTO outbox_events (event_id, event_type, aggregate_type, aggregate_id, payload, status, retry_count, correlation_id, event_version, occurred_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [randomUUID(), 'ORDER_FINALIZED', 'ORDER', String(dto.orderId), JSON.stringify(orderFinalizedPayload), 'PENDING', 0, correlationStr, 1]
+          );
+
+          await conn.commit();
+          console.log(`[${correlationStr}] [PaymentService] Self-healing order #${dto.orderId} finalization complete.`);
+        } catch (err: any) {
+          await conn.rollback();
+          console.error(`[${correlationStr}] [PaymentService] Self-healing failed for order #${dto.orderId}:`, err.message);
+        } finally {
+          conn.release();
+        }
+
+        // Return the captured payment session details
+        return this.mapToResponseDTO(activePayment);
+      }
+
       // Check if the lock can be cleared (Stale CREATED recovery strategy)
       const createdAtTime = activePayment.createdAt ? activePayment.createdAt.getTime() : Date.now();
       const ageInMs = Date.now() - createdAtTime;
