@@ -7,6 +7,17 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 require('dotenv').config();
 
+const lastErrors = [];
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  lastErrors.push({
+    time: new Date().toISOString(),
+    message: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')
+  });
+  if (lastErrors.length > 100) lastErrors.shift();
+  originalConsoleError(...args);
+};
+
 const app = express();
 
 // Trust reverse proxy headers (for Render, Vercel, etc.)
@@ -67,6 +78,14 @@ const { AnalyticsModule } = require('./analytics/analytics');
 AnalyticsModule.register(app);
 
 // Health check
+app.get('/api/debug-errors', (req, res) => {
+  res.json({
+    errors: lastErrors,
+    dbMode: process.env.DB_HOST === 'mysql9.serv00.com' ? 'sqlite_forced' : 'mysql',
+    env: process.env.NODE_ENV
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString(), env: process.env.NODE_ENV });
 });
