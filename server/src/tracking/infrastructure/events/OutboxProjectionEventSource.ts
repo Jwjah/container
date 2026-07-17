@@ -77,8 +77,8 @@ export class OutboxProjectionEventSource implements IProjectionEventSource {
    */
   public async lease(events: DomainEvent[], leaseDurationMs: number, workerId: string): Promise<void> {
     const expiredTime = new Date(Date.now() - leaseDurationMs);
-    const expiredTimeStr = expiredTime.toISOString();
-    const nowStr = new Date().toISOString();
+    const expiredTimeStr = expiredTime.toISOString().slice(0, 19).replace('T', ' ');
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     const updateQuery = `
       UPDATE outbox_events 

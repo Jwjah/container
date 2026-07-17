@@ -88,15 +88,16 @@ export class AnalyticsWorker {
         await conn.beginTransaction();
         await conn.execute(
           `INSERT INTO dead_letter_events
-             (event_id, aggregate_id, aggregate_type, event_type, payload, error_message)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+             (event_id, aggregate_id, aggregate_type, event_type, payload, error_message, retry_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             event.eventId,
             event.payload.orderId || event.payload.shopId || 'unknown',
             'AnalyticsEvent',
             event.eventType,
             JSON.stringify(event.payload),
-            error.message
+            error.message,
+            5
           ]
         );
         await this.source.acknowledge(event, conn);

@@ -94,8 +94,8 @@ export class NotificationEventWorker {
         // Write to DLQ table
         const query = `
           INSERT INTO dead_letter_events (
-            event_id, aggregate_id, aggregate_type, event_type, payload, error_message
-          ) VALUES (?, ?, ?, ?, ?, ?)
+            event_id, aggregate_id, aggregate_type, event_type, payload, error_message, retry_count
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         await conn.execute(query, [
           event.eventId,
@@ -103,7 +103,8 @@ export class NotificationEventWorker {
           'NotificationEvent',
           event.eventType,
           JSON.stringify(event.payload),
-          error.message
+          error.message,
+          5
         ]);
 
         // Acknowledge in inbox processed markers to remove from pending stream

@@ -36,7 +36,7 @@ export class SqlUserAnalyticsRepository implements IUserAnalyticsRepository {
   async upsert(analytics: UserAnalytics, connection?: any): Promise<UserAnalytics> {
     const executor = connection || db;
     const existing = await this.findByUserId(analytics.userId, executor);
-    const lastOrderAt = analytics.lastOrderAt ? analytics.lastOrderAt.toISOString() : null;
+    const lastOrderAt = analytics.lastOrderAt ? analytics.lastOrderAt.toISOString().slice(0, 19).replace('T', ' ') : null;
 
     if (!existing) {
       await executor.execute(

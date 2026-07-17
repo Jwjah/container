@@ -28,7 +28,7 @@ export class SqlOutboxRepository implements IOutboxRepository {
 
   public async create(event: OutboxEvent, connection?: any): Promise<OutboxEvent> {
     const executor = connection || db;
-    const occurredAtStr = event.occurredAt.toISOString();
+    const occurredAtStr = event.occurredAt.toISOString().slice(0, 19).replace('T', ' ');
 
     const [result] = await executor.execute(
       `INSERT INTO outbox_events (
@@ -85,7 +85,7 @@ export class SqlOutboxRepository implements IOutboxRepository {
     }
 
     const claimedEvents: OutboxEvent[] = [];
-    const nowStr = new Date().toISOString();
+    const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     for (const row of rows) {
       await executor.execute(
@@ -105,8 +105,8 @@ export class SqlOutboxRepository implements IOutboxRepository {
 
   public async update(event: OutboxEvent, connection?: any): Promise<OutboxEvent> {
     const executor = connection || db;
-    const startedStr = event.processingStartedAt ? event.processingStartedAt.toISOString() : null;
-    const processedStr = event.processedAt ? event.processedAt.toISOString() : null;
+    const startedStr = event.processingStartedAt ? event.processingStartedAt.toISOString().slice(0, 19).replace('T', ' ') : null;
+    const processedStr = event.processedAt ? event.processedAt.toISOString().slice(0, 19).replace('T', ' ') : null;
 
     await executor.execute(
       `UPDATE outbox_events SET 
@@ -134,7 +134,7 @@ export class SqlOutboxRepository implements IOutboxRepository {
 
   public async recoverStaleEvents(timeoutMs: number, connection?: any): Promise<number> {
     const executor = connection || db;
-    const cutoffTime = new Date(Date.now() - timeoutMs).toISOString();
+    const cutoffTime = new Date(Date.now() - timeoutMs).toISOString().slice(0, 19).replace('T', ' ');
 
     const [result] = await executor.execute(
       `UPDATE outbox_events 

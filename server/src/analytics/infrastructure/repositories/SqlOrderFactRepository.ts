@@ -68,7 +68,7 @@ export class SqlOrderFactRepository implements IOrderFactRepository {
     const executor = connection || db;
     const existing = await this.findByOrderId(fact.orderId, executor);
 
-    const toTs = (d: Date | null): string | null => d ? d.toISOString() : null;
+    const toTs = (d: Date | null): string | null => d ? d.toISOString().slice(0, 19).replace('T', ' ') : null;
 
     if (!existing) {
       await executor.execute(
