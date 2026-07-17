@@ -613,7 +613,7 @@ exports.downloadPrintPdf = async (req, res) => {
     
     // Fetch file details along with order details
     const [files] = await db.execute(
-      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes 
+      `SELECT f.*, o.order_hash, o.order_id, o.shop_id, o.pickup_qr, o.delivery_qr, o.print_type, o.notes, o.payment_status, o.status 
        FROM order_files f 
        JOIN orders o ON f.order_id = o.id 
        WHERE f.id = ?`,
@@ -632,10 +632,7 @@ exports.downloadPrintPdf = async (req, res) => {
       if (!shops.length || shops[0].id !== file.shop_id) {
         return res.status(403).json({ error: 'Unauthorized to download this file' });
       }
-      // Retrieve order paid status
-      const [orderRows] = await db.execute('SELECT status, payment_status FROM orders WHERE id = ?', [file.order_id]);
-      const order = orderRows[0];
-      if (!order || (order.payment_status !== 'PAID' && order.status !== 'confirmed')) {
+      if (file.payment_status !== 'PAID' || (file.status && file.status.toUpperCase() === 'CANCELLED')) {
         return res.status(403).json({ error: 'Order is not paid or confirmed' });
       }
     }
