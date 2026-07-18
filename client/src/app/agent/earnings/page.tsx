@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { StaggerContainer, StaggerItem, HoverCard } from '@/components/animations';
-import { HiOutlineArrowCircleDown, HiOutlineArrowCircleUp } from 'react-icons/hi';
+import { HiOutlineArrowCircleDown, HiOutlineArrowCircleUp, HiOutlineCheckCircle } from 'react-icons/hi';
 import WithdrawalModal from '@/components/WithdrawalModal';
 
 export default function AgentEarningsPage() {
@@ -20,7 +20,7 @@ export default function AgentEarningsPage() {
         api.get('/agent/earnings'),
         api.get('/auth/transactions')
       ]);
-      setData(earnRes.data.earnings || { total_earned: 0, total_deliveries: 0 });
+      setData(earnRes.data);
       setTransactions(transRes.data.transactions || []);
     } catch (e) {
       console.error(e);
@@ -31,42 +31,44 @@ export default function AgentEarningsPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(() => loadData(true), 3000);
+    const interval = setInterval(() => loadData(true), 10000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div>
-      <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Earnings & Wallet 💰</h1>
-      <p style={{ color: 'var(--text-tertiary)', marginBottom: 32 }}>Track your delivery earnings and payouts.</p>
+      <h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>Earnings Dashboard</h1>
+      <p style={{ color: 'var(--text-tertiary)', marginBottom: 24 }}>Track your delivery payouts.</p>
 
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="skeleton" style={{ height: 160 }} />
-          <div className="skeleton" style={{ height: 300 }} />
-        </div>
+        <div className="skeleton" style={{ height: 200 }} />
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, marginBottom: 32 }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card" style={{ padding: 32, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), transparent)', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-              <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Available Balance</div>
-              <div style={{ fontSize: 48, fontWeight: 900, color: 'var(--success)', marginBottom: 16 }}>₹{parseFloat(data.total_earned || 0).toFixed(2)}</div>
-              <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginBottom: 32 }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card" style={{ padding: 24 }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Total Earned</div>
+              <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--success)' }}>₹{parseFloat(data.total_earned || 0).toFixed(2)}</div>
             </motion.div>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card" style={{ padding: 32 }}>
-              <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Total Deliveries</div>
-              <div style={{ fontSize: 48, fontWeight: 900 }}>{data.total_deliveries || 0}</div>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card" style={{ padding: 24 }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Completed Deliveries</div>
+              <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--text-primary)' }}>{data.total_deliveries}</div>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card" style={{ padding: 24, background: 'rgba(34, 197, 94, 0.02)' }}>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Available for Withdrawal</div>
+              <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--success)', marginBottom: 12 }}>₹{parseFloat(data.wallet_balance || 0).toFixed(2)}</div>
+              <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
             </motion.div>
           </div>
 
           <WithdrawalModal 
             isOpen={modalOpen} 
             onClose={() => setModalOpen(false)} 
-            availableBalance={parseFloat(data.total_earned || 0)} 
+            availableBalance={parseFloat(data.wallet_balance || 0)} 
             onSuccess={() => loadData(true)} 
           />
 
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Transaction History</h3>
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Transaction Ledger</h3>
+
           {transactions.length === 0 ? (
             <div className="glass-card empty-state">No transactions yet. Complete a delivery to earn!</div>
           ) : (
@@ -77,10 +79,10 @@ export default function AgentEarningsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ 
                         width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: t.type === 'credit' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                        background: t.type === 'credit' ? 'rgba(34, 197, 94, 0.1)' : (t.type === 'settlement' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
+                        color: t.type === 'credit' ? 'var(--success)' : (t.type === 'settlement' ? '#3b82f6' : 'var(--error)')
                       }}>
-                        {t.type === 'credit' ? <HiOutlineArrowCircleUp size={20} /> : <HiOutlineArrowCircleDown size={20} />}
+                        {t.type === 'credit' ? <HiOutlineArrowCircleUp size={20} /> : (t.type === 'settlement' ? <HiOutlineCheckCircle size={20} /> : <HiOutlineArrowCircleDown size={20} />)}
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{t.description}</div>
@@ -90,9 +92,9 @@ export default function AgentEarningsPage() {
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ 
                         fontSize: 15, fontWeight: 700, 
-                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                        color: t.type === 'credit' ? 'var(--success)' : (t.type === 'settlement' ? '#3b82f6' : 'var(--error)')
                       }}>
-                        {t.type === 'credit' ? '+' : '-'}₹{parseFloat(t.amount).toFixed(2)}
+                        {t.type === 'credit' ? '+' : (t.type === 'settlement' ? '' : '-')}₹{parseFloat(t.amount).toFixed(2)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Balance: ₹{parseFloat(t.balance_after || 0).toFixed(2)}</div>
                     </div>

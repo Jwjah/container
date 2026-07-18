@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import api from '@/lib/api';
 import { motion } from 'framer-motion';
 import { StaggerContainer, StaggerItem, HoverCard } from '@/components/animations';
-import { HiOutlineFilter, HiOutlineCash, HiOutlineArrowCircleDown, HiOutlineArrowCircleUp } from 'react-icons/hi';
+import { HiOutlineFilter, HiOutlineCash, HiOutlineArrowCircleDown, HiOutlineArrowCircleUp, HiOutlineCheckCircle } from 'react-icons/hi';
 import WithdrawalModal from '@/components/WithdrawalModal';
 
 export default function ShopWalletPage() {
@@ -70,13 +70,18 @@ export default function ShopWalletPage() {
                 <option value="">All Types</option>
                 <option value="credit">Credits</option>
                 <option value="debit">Debits</option>
+                <option value="settlement">Settlements</option>
               </select>
             </div>
-            <div className="input-group">
-              <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>From</label>
-              <input className="input" type="date" style={{ height: 36, padding: '0 12px' }} value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} />
+            <div className="input-group" style={{ flex: 1, minWidth: 150 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Start Date</label>
+              <input type="date" className="input" style={{ height: 36, padding: '0 12px' }} value={filters.startDate} onChange={e => setFilters({...filters, startDate: e.target.value})} />
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={() => loadData()} style={{ height: 36 }}>
+            <div className="input-group" style={{ flex: 1, minWidth: 150 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>End Date</label>
+              <input type="date" className="input" style={{ height: 36, padding: '0 12px' }} value={filters.endDate} onChange={e => setFilters({...filters, endDate: e.target.value})} />
+            </div>
+            <button className="btn btn-primary" onClick={() => loadData()} style={{ height: 36, display: 'flex', alignItems: 'center', gap: 8 }}>
               <HiOutlineFilter /> Filter
             </button>
           </div>
@@ -91,10 +96,10 @@ export default function ShopWalletPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{ 
                         width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: t.type === 'credit' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                        background: t.type === 'credit' ? 'rgba(34, 197, 94, 0.1)' : (t.type === 'settlement' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)'),
+                        color: t.type === 'credit' ? 'var(--success)' : (t.type === 'settlement' ? '#3b82f6' : 'var(--error)')
                       }}>
-                        {t.type === 'credit' ? <HiOutlineArrowCircleUp size={20} /> : <HiOutlineArrowCircleDown size={20} />}
+                        {t.type === 'credit' ? <HiOutlineArrowCircleUp size={20} /> : (t.type === 'settlement' ? <HiOutlineCheckCircle size={20} /> : <HiOutlineArrowCircleDown size={20} />)}
                       </div>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{t.description}</div>
@@ -104,9 +109,9 @@ export default function ShopWalletPage() {
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ 
                         fontSize: 15, fontWeight: 700, 
-                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                        color: t.type === 'credit' ? 'var(--success)' : (t.type === 'settlement' ? '#3b82f6' : 'var(--error)')
                       }}>
-                        {t.type === 'credit' ? '+' : '-'}₹{parseFloat(t.amount).toFixed(2)}
+                        {t.type === 'credit' ? '+' : (t.type === 'settlement' ? '' : '-')}₹{parseFloat(t.amount).toFixed(2)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Balance: ₹{parseFloat(t.balance_after || 0).toFixed(2)}</div>
                     </div>

@@ -768,7 +768,7 @@ const migrate = async () => {
     `CREATE TABLE IF NOT EXISTS transactions (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL,
-      type ENUM('credit','debit') NOT NULL,
+      type ENUM('credit','debit','settlement') NOT NULL,
       amount DECIMAL(12,2) NOT NULL,
       description VARCHAR(500),
       reference_id VARCHAR(100),
@@ -1384,7 +1384,8 @@ const migrate = async () => {
     `ALTER TABLE users ADD COLUMN held_balance DECIMAL(12,2) DEFAULT 0.00`,
     `ALTER TABLE shops ADD COLUMN held_balance DECIMAL(12,2) DEFAULT 0.00`,
     `ALTER TABLE orders ADD COLUMN delivery_timeout_notified INTEGER DEFAULT 0`,
-    `ALTER TABLE orders ADD COLUMN ready_at TEXT DEFAULT NULL`
+    `ALTER TABLE orders ADD COLUMN ready_at TEXT DEFAULT NULL`,
+    `ALTER TABLE transactions MODIFY COLUMN type ENUM('credit', 'debit', 'settlement') NOT NULL`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { } // Ignore if column already exists or command unsupported
