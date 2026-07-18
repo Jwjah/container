@@ -183,7 +183,25 @@ export default function QueuePage() {
                     <span>📋 {order.copies} copies</span>
                     <span>{order.print_type === 'color' ? '🌈 Color' : '⬛ B&W'}</span>
                     <span>{order.layout === 'double' ? '📖 Double' : '📃 Single'}</span>
-                    {order.binding ? <span>📚 Binding</span> : null}
+                    {order.binding ? (
+                      <span>
+                        📚 {(() => {
+                          if (order.finishing_type && order.finishing_type !== 'none') {
+                            const type = order.finishing_type.toLowerCase();
+                            if (type === 'staple') return 'Staple';
+                            if (type === 'spiral') return 'Spiral Binding';
+                            if (type === 'stick') return 'Stick File';
+                            return order.finishing_type;
+                          }
+                          const match = (order.notes || '').match(/Binding:\s*(\w+)/i);
+                          const type = match ? match[1].toLowerCase() : 'spiral';
+                          if (type === 'staple') return 'Staple';
+                          if (type === 'spiral') return 'Spiral Binding';
+                          if (type === 'stick') return 'Stick File';
+                          return 'Binding';
+                        })()}
+                      </span>
+                    ) : null}
                     <span>
                       {order.delivery_type === 'hostel' ? (
                         order.delivery_timeout_notified === 1 ? (

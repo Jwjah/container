@@ -42,6 +42,7 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<any>(null);
   const [scannerType, setScannerType] = useState<'shop' | 'agent' | null>(null);
   const [isPaying, setIsPaying] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const handlePay = async (order: any) => {
@@ -96,6 +97,19 @@ export default function OrdersPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to initiate payment');
       setIsPaying(false);
+    }
+  };
+
+  const handleReorder = async (oldOrder: any) => {
+    setIsReordering(true);
+    try {
+      const { data } = await api.post(`/orders/${oldOrder.id}/reorder`);
+      toast.success('Order duplicated successfully! Initiating payment...');
+      await handlePay(data.order);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Reorder failed');
+    } finally {
+      setIsReordering(false);
     }
   };
 
@@ -251,7 +265,24 @@ export default function OrdersPage() {
                   )}
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 13, color: 'var(--text-tertiary)' }}>
-                    <span>{order.total_pages} pages · {order.copies} copy · {order.print_type === 'color' ? 'Color' : 'B&W'}</span>
+                    <span>
+                      {order.total_pages} pages · {order.copies} {order.copies > 1 ? 'copies' : 'copy'} · {order.print_type === 'color' ? 'Color' : 'B&W'}
+                      {order.binding ? ` · ${(() => {
+                        if (order.finishing_type && order.finishing_type !== 'none') {
+                          const type = order.finishing_type.toLowerCase();
+                          if (type === 'staple') return 'Staple';
+                          if (type === 'spiral') return 'Spiral';
+                          if (type === 'stick') return 'Stick File';
+                          return order.finishing_type;
+                        }
+                        const match = (order.notes || '').match(/Binding:\s*(\w+)/i);
+                        const type = match ? match[1].toLowerCase() : 'spiral';
+                        if (type === 'staple') return 'Staple';
+                        if (type === 'spiral') return 'Spiral';
+                        if (type === 'stick') return 'Stick File';
+                        return 'Binding';
+                      })()}` : ''}
+                    </span>
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₹{parseFloat(order.total_price || 0).toFixed(0)}</span>
                   </div>
                 </motion.div>
@@ -279,6 +310,27 @@ export default function OrdersPage() {
               <div><span style={{ color: 'var(--text-tertiary)' }}>Type:</span> {selected.print_type === 'color' ? 'Color' : 'B&W'}</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Layout:</span> {selected.layout === 'double' ? 'Double' : 'Single'}-sided</div>
               <div><span style={{ color: 'var(--text-tertiary)' }}>Delivery:</span> {selected.delivery_type === 'hostel' ? 'Hostel' : 'Pickup'}</div>
+              {selected.binding === 1 || selected.binding === true || selected.binding ? (
+                <div>
+                  <span style={{ color: 'var(--text-tertiary)' }}>Binding:</span>{' '}
+                  {(() => {
+                    if (selected.finishing_type && selected.finishing_type !== 'none') {
+                      const type = selected.finishing_type.toLowerCase();
+                      const priceStr = parseFloat(selected.finishing_price || 0) > 0 ? ` (₹${parseFloat(selected.finishing_price).toFixed(0)})` : ' (Free)';
+                      if (type === 'staple') return 'Staple (Free)';
+                      if (type === 'spiral') return `Spiral Binding${priceStr}`;
+                      if (type === 'stick') return `Stick File${priceStr}`;
+                      return `${selected.finishing_type}${priceStr}`;
+                    }
+                    const match = (selected.notes || '').match(/Binding:\s*(\w+)/i);
+                    const type = match ? match[1].toLowerCase() : 'spiral';
+                    if (type === 'staple') return 'Staple (Free)';
+                    if (type === 'spiral') return 'Spiral Binding';
+                    if (type === 'stick') return 'Stick File';
+                    return 'Binding';
+                  })()}
+                </div>
+              ) : null}
               <div><span style={{ color: 'var(--text-tertiary)' }}>Total:</span> <strong>₹{parseFloat(selected.total_price || 0).toFixed(0)}</strong></div>
             </div>
 
@@ -433,6 +485,18 @@ export default function OrdersPage() {
                 )}
               </div>
             )}
+
+            {/* Reorder Action */}
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <TapButton 
+                className="btn btn-primary" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'linear-gradient(135deg, var(--primary), var(--primary-light))' }}
+                onClick={() => handleReorder(selected)}
+                disabled={isReordering}
+              >
+                🔄 {isReordering ? 'Processing Reorder...' : 'Reorder This Print Job'}
+              </TapButton>
+            </div>
 
             <button className="btn btn-secondary" style={{ width: '100%', marginTop: 24 }} onClick={() => setSelected(null)}>Close</button>
           </div>

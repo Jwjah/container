@@ -12,6 +12,7 @@ router.patch('/:id/status', authenticate, authorize('shop', 'admin', 'student'),
 router.post('/:id/verify-pickup', authenticate, authorize('student', 'admin'), orders.verifyPickupByStudent);
 router.post('/:id/verify-delivery', authenticate, authorize('student', 'admin'), orders.verifyDeliveryByStudent);
 router.patch('/:id/change-fulfillment', authenticate, authorize('student', 'admin'), orders.changeFulfillment);
+router.post('/:id/reorder', authenticate, authorize('student'), orders.reorderOrder);
 router.get('/files/:fileId/print-pdf', authenticate, authorize('shop', 'admin'), orders.downloadPrintPdf);
 
 module.exports = router;

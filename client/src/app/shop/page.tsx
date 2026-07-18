@@ -49,7 +49,7 @@ export default function ShopDashboard() {
   };
 
   // Shop registration form
-  const [regForm, setRegForm] = useState({ shop_name: '', description: '', location: '', price_bw: '2', price_color: '5', price_binding: '30' });
+  const [regForm, setRegForm] = useState({ shop_name: '', description: '', location: '', price_bw: '2', price_color: '5', price_binding: '30', price_stick_file: '10' });
   const [registering, setRegistering] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -97,21 +97,26 @@ export default function ShopDashboard() {
               <textarea className="input" placeholder="Tell students about your shop..." value={regForm.description}
                 onChange={(e) => setRegForm({ ...regForm, description: e.target.value })} rows={3} id="shop-desc" />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12 }}>
               <div className="input-group">
-                <label>B&W (₹/page)</label>
+                <label>B&W (₹)</label>
                 <input className="input" type="number" step="0.5" value={regForm.price_bw}
                   onChange={(e) => setRegForm({ ...regForm, price_bw: e.target.value })} id="shop-bw" />
               </div>
               <div className="input-group">
-                <label>Color (₹/page)</label>
+                <label>Color (₹)</label>
                 <input className="input" type="number" step="0.5" value={regForm.price_color}
                   onChange={(e) => setRegForm({ ...regForm, price_color: e.target.value })} id="shop-color" />
               </div>
               <div className="input-group">
-                <label>Binding (₹)</label>
+                <label>Spiral (₹)</label>
                 <input className="input" type="number" step="1" value={regForm.price_binding}
                   onChange={(e) => setRegForm({ ...regForm, price_binding: e.target.value })} id="shop-binding" />
+              </div>
+              <div className="input-group">
+                <label>Stick (₹)</label>
+                <input className="input" type="number" step="1" value={regForm.price_stick_file}
+                  onChange={(e) => setRegForm({ ...regForm, price_stick_file: e.target.value })} id="shop-stick" />
               </div>
             </div>
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }} className="btn btn-primary btn-lg" type="submit" disabled={registering}>

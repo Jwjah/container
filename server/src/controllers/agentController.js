@@ -48,7 +48,10 @@ exports.acceptDelivery = async (req, res) => {
     // Assign agent to the order but keep status as 'ready'.
     // The order will only move to 'out_for_delivery' AFTER the agent
     // physically goes to the shop and scans the shop's QR code (verifyPickup).
-    await db.execute('UPDATE orders SET agent_id = ? WHERE id = ?', [req.user.id, orderId]);
+    const [updateResult] = await db.execute('UPDATE orders SET agent_id = ? WHERE id = ? AND agent_id IS NULL', [req.user.id, orderId]);
+    if (updateResult.affectedRows === 0) {
+      return res.status(409).json({ error: 'This delivery has already been accepted by another agent' });
+    }
 
     // Create delivery record — starts in 'assigned' state
     const earnings = parseFloat(order.delivery_fee) * 0.8; // 80% to agent

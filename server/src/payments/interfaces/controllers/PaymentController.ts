@@ -58,7 +58,12 @@ export class PaymentController {
         order_id: paymentResponse.gatewayOrderId,
         prefill: {
           name: student.name,
-          email: student.email
+          email: student.email,
+          contact: student.phone || ''
+        },
+        readonly: {
+          contact: true,
+          email: true
         },
         notes: {
           paymentUuid: paymentResponse.uuid

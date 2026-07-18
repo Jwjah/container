@@ -8,10 +8,28 @@ const printQueue = {};
 // POST /api/shops — Register a new shop
 exports.createShop = async (req, res) => {
   try {
-    const { shop_name, description, location, price_bw, price_color, price_binding } = req.body;
+    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file } = req.body;
 
     if (!shop_name) {
       return res.status(400).json({ error: 'Shop name is required' });
+    }
+
+    const pbw = parseFloat(price_bw);
+    const pco = parseFloat(price_color);
+    const pbi = parseFloat(price_binding);
+    const pst = parseFloat(price_stick_file);
+
+    if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
+      return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
+    }
+    if (price_color !== undefined && !isNaN(pco) && (pco < 0 || pco > 200)) {
+      return res.status(400).json({ error: 'Color print price must be between ₹0 and ₹200' });
+    }
+    if (price_binding !== undefined && !isNaN(pbi) && (pbi < 0 || pbi > 500)) {
+      return res.status(400).json({ error: 'Spiral binding price must be between ₹0 and ₹500' });
+    }
+    if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
+      return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
     }
 
     const [existing] = await db.execute('SELECT id FROM shops WHERE user_id = ?', [req.user.id]);
@@ -20,8 +38,8 @@ exports.createShop = async (req, res) => {
     }
 
     const [result] = await db.execute(
-      'INSERT INTO shops (user_id, shop_name, description, location, price_bw, price_color, price_binding) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, shop_name, description || null, location || null, price_bw || 2.00, price_color || 5.00, price_binding || 30.00]
+      'INSERT INTO shops (user_id, shop_name, description, location, price_bw, price_color, price_binding, price_stick_file) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.id, shop_name, description || null, location || null, price_bw || 2.00, price_color || 5.00, price_binding || 30.00, price_stick_file || 10.00]
     );
 
     // Notify admins
@@ -132,10 +150,27 @@ exports.getShopStats = async (req, res) => {
 // PATCH /api/shops/pricing — Update shop pricing
 exports.updatePricing = async (req, res) => {
   try {
-    const { price_bw, price_color, price_binding } = req.body;
+    const { price_bw, price_color, price_binding, price_stick_file } = req.body;
+    const pbw = parseFloat(price_bw);
+    const pco = parseFloat(price_color);
+    const pbi = parseFloat(price_binding);
+    const pst = parseFloat(price_stick_file);
+
+    if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
+      return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
+    }
+    if (price_color !== undefined && !isNaN(pco) && (pco < 0 || pco > 200)) {
+      return res.status(400).json({ error: 'Color print price must be between ₹0 and ₹200' });
+    }
+    if (price_binding !== undefined && !isNaN(pbi) && (pbi < 0 || pbi > 500)) {
+      return res.status(400).json({ error: 'Spiral binding price must be between ₹0 and ₹500' });
+    }
+    if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
+      return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
+    }
     await db.execute(
-      'UPDATE shops SET price_bw = ?, price_color = ?, price_binding = ? WHERE user_id = ?',
-      [price_bw || 2.00, price_color || 5.00, price_binding || 30.00, req.user.id]
+      'UPDATE shops SET price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ? WHERE user_id = ?',
+      [price_bw || 2.00, price_color || 5.00, price_binding || 30.00, price_stick_file || 10.00, req.user.id]
     );
     res.json({ message: 'Pricing updated' });
   } catch (err) {
@@ -147,10 +182,27 @@ exports.updatePricing = async (req, res) => {
 // PUT /api/shops/:id — Update shop details
 exports.updateShop = async (req, res) => {
   try {
-    const { shop_name, description, location, price_bw, price_color, price_binding } = req.body;
+    const { shop_name, description, location, price_bw, price_color, price_binding, price_stick_file } = req.body;
+    const pbw = parseFloat(price_bw);
+    const pco = parseFloat(price_color);
+    const pbi = parseFloat(price_binding);
+    const pst = parseFloat(price_stick_file);
+
+    if (price_bw !== undefined && !isNaN(pbw) && (pbw < 0 || pbw > 50)) {
+      return res.status(400).json({ error: 'B&W print price must be between ₹0 and ₹50' });
+    }
+    if (price_color !== undefined && !isNaN(pco) && (pco < 0 || pco > 200)) {
+      return res.status(400).json({ error: 'Color print price must be between ₹0 and ₹200' });
+    }
+    if (price_binding !== undefined && !isNaN(pbi) && (pbi < 0 || pbi > 500)) {
+      return res.status(400).json({ error: 'Spiral binding price must be between ₹0 and ₹500' });
+    }
+    if (price_stick_file !== undefined && !isNaN(pst) && (pst < 0 || pst > 500)) {
+      return res.status(400).json({ error: 'Stick file price must be between ₹0 and ₹500' });
+    }
     await db.execute(
-      'UPDATE shops SET shop_name = ?, description = ?, location = ?, price_bw = ?, price_color = ?, price_binding = ? WHERE id = ? AND user_id = ?',
-      [shop_name, description || null, location || null, price_bw || 2.0, price_color || 5.0, price_binding || 30.0, req.params.id, req.user.id]
+      'UPDATE shops SET shop_name = ?, description = ?, location = ?, price_bw = ?, price_color = ?, price_binding = ?, price_stick_file = ? WHERE id = ? AND user_id = ?',
+      [shop_name, description || null, location || null, price_bw || 2.0, price_color || 5.0, price_binding || 30.0, price_stick_file || 10.0, req.params.id, req.user.id]
     );
     res.json({ message: 'Shop settings updated successfully' });
   } catch (err) {

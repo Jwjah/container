@@ -9,7 +9,7 @@ const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const [users] = await db.execute('SELECT id, name, email, role, is_verified, is_suspended FROM users WHERE id = ?', [decoded.id]);
+    const [users] = await db.execute('SELECT id, name, email, phone, role, is_verified, is_suspended FROM users WHERE id = ?', [decoded.id]);
     
     if (!users.length) {
       return res.status(401).json({ error: 'User not found' });

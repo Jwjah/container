@@ -44,6 +44,7 @@ const migrate = async () => {
       price_bw REAL DEFAULT 2.00,
       price_color REAL DEFAULT 5.00,
       price_binding REAL DEFAULT 30.00,
+      price_stick_file REAL DEFAULT 10.00,
       rating REAL DEFAULT 0.00,
       total_orders INTEGER DEFAULT 0,
       wallet_balance REAL DEFAULT 0.00,
@@ -71,6 +72,12 @@ const migrate = async () => {
       delivery_qr TEXT DEFAULT NULL,
       picked_up_at TEXT,
       delivered_at TEXT,
+      finishing_type TEXT DEFAULT 'none',
+      finishing_price REAL DEFAULT 0.00,
+      price_bw_used REAL DEFAULT 2.00,
+      price_color_used REAL DEFAULT 5.00,
+      price_binding_used REAL DEFAULT 30.00,
+      price_stick_file_used REAL DEFAULT 10.00,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -700,6 +707,7 @@ const migrate = async () => {
       price_bw DECIMAL(10,2) DEFAULT 2.00,
       price_color DECIMAL(10,2) DEFAULT 5.00,
       price_binding DECIMAL(10,2) DEFAULT 30.00,
+      price_stick_file DECIMAL(10,2) DEFAULT 10.00,
       rating DECIMAL(3,2) DEFAULT 0.00,
       total_orders INT DEFAULT 0,
       wallet_balance DECIMAL(12,2) DEFAULT 0.00,
@@ -728,6 +736,12 @@ const migrate = async () => {
       delivery_qr TEXT DEFAULT NULL,
       picked_up_at TIMESTAMP NULL,
       delivered_at TIMESTAMP NULL,
+      finishing_type VARCHAR(50) DEFAULT 'none',
+      finishing_price DECIMAL(10,2) DEFAULT 0.00,
+      price_bw_used DECIMAL(10,2) DEFAULT 2.00,
+      price_color_used DECIMAL(10,2) DEFAULT 5.00,
+      price_binding_used DECIMAL(10,2) DEFAULT 30.00,
+      price_stick_file_used DECIMAL(10,2) DEFAULT 10.00,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (student_id) REFERENCES users(id),
@@ -1385,7 +1399,14 @@ const migrate = async () => {
     `ALTER TABLE shops ADD COLUMN held_balance DECIMAL(12,2) DEFAULT 0.00`,
     `ALTER TABLE orders ADD COLUMN delivery_timeout_notified INTEGER DEFAULT 0`,
     `ALTER TABLE orders ADD COLUMN ready_at TEXT DEFAULT NULL`,
-    `ALTER TABLE transactions MODIFY COLUMN type ENUM('credit', 'debit', 'settlement') NOT NULL`
+    `ALTER TABLE transactions MODIFY COLUMN type ENUM('credit', 'debit', 'settlement') NOT NULL`,
+    `ALTER TABLE orders ADD COLUMN finishing_type TEXT DEFAULT 'none'`,
+    `ALTER TABLE orders ADD COLUMN finishing_price REAL DEFAULT 0.00`,
+    `ALTER TABLE shops ADD COLUMN price_stick_file REAL DEFAULT 10.00`,
+    `ALTER TABLE orders ADD COLUMN price_bw_used REAL DEFAULT 2.00`,
+    `ALTER TABLE orders ADD COLUMN price_color_used REAL DEFAULT 5.00`,
+    `ALTER TABLE orders ADD COLUMN price_binding_used REAL DEFAULT 30.00`,
+    `ALTER TABLE orders ADD COLUMN price_stick_file_used REAL DEFAULT 10.00`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { } // Ignore if column already exists or command unsupported

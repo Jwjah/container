@@ -87,8 +87,12 @@ export default function ShopSettingsPage() {
             <input className="input" type="number" step="0.5" value={shop.price_color} onChange={e => setShop({...shop, price_color: e.target.value})} required />
           </div>
           <div className="input-group">
-            <label>Binding (₹)</label>
+            <label>Spiral Binding (₹)</label>
             <input className="input" type="number" step="1" value={shop.price_binding} onChange={e => setShop({...shop, price_binding: e.target.value})} required />
+          </div>
+          <div className="input-group">
+            <label>Stick File (₹)</label>
+            <input className="input" type="number" step="1" value={shop.price_stick_file} onChange={e => setShop({...shop, price_stick_file: e.target.value})} required />
           </div>
         </div>
 

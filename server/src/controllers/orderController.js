@@ -57,6 +57,12 @@ exports.createOrder = async (req, res) => {
       });
     }
 
+    const bindingType = req.body.binding_type || 'none';
+    const allowedBindingTypes = ['none', 'staple', 'spiral', 'stick'];
+    if (!allowedBindingTypes.includes(bindingType.toLowerCase())) {
+      return res.status(400).json({ error: 'Invalid binding option' });
+    }
+
     // Calculate price
     const pricing = calculatePrice({
       pages: totalPages,
@@ -64,6 +70,8 @@ exports.createOrder = async (req, res) => {
       printType: print_type || 'bw',
       layout: layout || 'single',
       binding: binding === 'true' || binding === true,
+      binding_type: bindingType,
+      notes: notes || '',
       shop,
     });
 
@@ -75,15 +83,18 @@ exports.createOrder = async (req, res) => {
 
     // Create order
     const [result] = await db.execute(
-      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         orderHash, req.user.id, shop_id,
         print_type || 'bw', layout || 'single', parseInt(copies) || 1,
         binding === 'true' || binding === true ? 1 : 0,
         delivery_type || 'pickup', hostel_address || null,
         totalPages, totalPrice, deliveryFee, notes || null,
-        'UNPAID', 'pending'
+        'UNPAID', 'pending',
+        bindingType, pricing.bindingCost,
+        pricing.price_bw_used, pricing.price_color_used,
+        pricing.price_binding_used, pricing.price_stick_file_used
       ]
     );
 
@@ -277,6 +288,9 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     if (status === 'delivered') {
+      if (order.status === 'delivered') {
+        return res.json({ message: 'Order is already delivered', status });
+      }
       updates.delivered_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
       // Credit shop wallet
       const [shops] = await db.execute('SELECT * FROM shops WHERE id = ?', [order.shop_id]);
@@ -762,5 +776,168 @@ exports.downloadPrintPdf = async (req, res) => {
   } catch (err) {
     console.error('Download print PDF error:', err);
     res.status(500).json({ error: 'Failed to prepare PDF for printing' });
+  }
+};
+
+// POST /api/orders/:id/reorder — Clone a previous order for reordering
+exports.reorderOrder = async (req, res) => {
+  const axios = require('axios');
+  const { generateOrderHash, generateQRCode } = require('../utils/helpers');
+
+  try {
+    const orderId = req.params.id;
+
+    // 1. Fetch original order
+    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (!orders.length) {
+      return res.status(404).json({ error: 'Original order not found' });
+    }
+    const oldOrder = orders[0];
+
+    // 2. Security Check: verify logged-in student matches
+    if (Number(oldOrder.student_id) !== Number(req.user.id)) {
+      return res.status(403).json({ error: 'You are not authorized to reorder this print job' });
+    }
+
+    // 3. Shop availability checks
+    const [shops] = await db.execute('SELECT * FROM shops WHERE id = ? AND is_approved = 1', [oldOrder.shop_id]);
+    if (!shops.length) {
+      return res.status(404).json({ error: 'Shop is no longer available' });
+    }
+    const shop = shops[0];
+    if (!shop.is_open) {
+      return res.status(400).json({ error: 'This shop is currently closed. Please choose another shop or check back later.' });
+    }
+
+    // 4. Fetch previous order files
+    const [files] = await db.execute('SELECT * FROM order_files WHERE order_id = ?', [oldOrder.id]);
+    if (!files.length) {
+      return res.status(400).json({ error: 'Original order files not found' });
+    }
+
+    // 5. Cloudinary existence validation check
+    for (const file of files) {
+      try {
+        const headRes = await axios.head(file.file_path, { timeout: 5000 });
+        if (headRes.status !== 200) {
+          return res.status(400).json({
+            error: `File "${file.original_name}" is no longer available on the cloud storage. Please place a new order and upload your files again.`
+          });
+        }
+      } catch (err) {
+        if (err.response && (err.response.status === 404 || err.response.status === 410)) {
+          return res.status(400).json({
+            error: `File "${file.original_name}" is no longer available on the cloud storage. Please place a new order and upload your files again.`
+          });
+        }
+        // Transient error (5xx, timeout, network failure, etc.)
+        console.warn(`[Reorder] Transient error checking file ${file.file_path}:`, err.message);
+        return res.status(503).json({
+          error: `Temporary storage connection issue while checking "${file.original_name}". Please try again in a few moments.`
+        });
+      }
+    }
+
+    // 6. Calculate pricing dynamically
+    let bindingType = 'none';
+    if (oldOrder.binding) {
+      const notes = oldOrder.notes || '';
+      const match = notes.match(/Binding:\s*(\w+)/i);
+      if (match) {
+        bindingType = match[1].toLowerCase();
+      } else {
+        bindingType = 'spiral'; // fallback
+      }
+    }
+
+    const pricing = calculatePrice({
+      pages: oldOrder.total_pages,
+      copies: oldOrder.copies,
+      printType: oldOrder.print_type,
+      layout: oldOrder.layout,
+      binding: oldOrder.binding === 1 || oldOrder.binding === true,
+      binding_type: bindingType,
+      notes: oldOrder.notes || '',
+      shop
+    });
+
+    const deliveryFee = oldOrder.delivery_type === 'hostel' ? 15.00 : 0.00;
+    const totalPrice = pricing.total + deliveryFee;
+
+    // 7. Insert new order in a transaction block
+    const newOrderId = await db.transaction(async (conn) => {
+      const newOrderHash = generateOrderHash(Date.now(), req.user.id);
+      
+      const [result] = await conn.execute(
+        `INSERT INTO orders (order_hash, student_id, shop_id, print_type, layout, copies, binding, delivery_type, hostel_address, total_pages, total_price, delivery_fee, notes, payment_status, status, finishing_type, finishing_price, price_bw_used, price_color_used, price_binding_used, price_stick_file_used) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          newOrderHash, req.user.id, oldOrder.shop_id,
+          oldOrder.print_type, oldOrder.layout, oldOrder.copies,
+          oldOrder.binding, oldOrder.delivery_type, oldOrder.hostel_address,
+          oldOrder.total_pages, totalPrice, deliveryFee, oldOrder.notes,
+          'UNPAID', 'pending',
+          bindingType, pricing.bindingCost,
+          pricing.price_bw_used, pricing.price_color_used,
+          pricing.price_binding_used, pricing.price_stick_file_used
+        ]
+      );
+      
+      const insertId = result.insertId;
+
+      // Duplicate file records
+      for (const file of files) {
+        await conn.execute(
+          `INSERT INTO order_files (order_id, original_name, stored_name, file_path, file_size, mime_type, page_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            insertId, file.original_name, file.stored_name,
+            file.file_path, file.file_size, file.mime_type, file.page_count
+          ]
+        );
+      }
+
+      // Generate unique new QRs
+      const pickupQR = await generateQRCode({
+        type: 'pickup',
+        orderId: insertId,
+        hash: newOrderHash,
+        action: 'verify_pickup',
+      });
+
+      let deliveryQR = null;
+      if (oldOrder.delivery_type === 'hostel') {
+        deliveryQR = await generateQRCode({
+          type: 'delivery',
+          orderId: insertId,
+          hash: newOrderHash,
+          action: 'verify_delivery',
+        });
+      }
+
+      await conn.execute('UPDATE orders SET pickup_qr = ?, delivery_qr = ? WHERE id = ?', [pickupQR, deliveryQR, insertId]);
+
+      return insertId;
+    });
+
+    // 8. Fetch the new order details to return
+    const [newOrders] = await db.execute('SELECT * FROM orders WHERE id = ?', [newOrderId]);
+    const newOrder = newOrders[0];
+
+    res.status(201).json({
+      message: 'Order duplicated successfully',
+      order: {
+        id: newOrder.id,
+        hash: newOrder.order_hash,
+        totalPages: newOrder.total_pages,
+        pricing,
+        deliveryFee,
+        totalPrice,
+      }
+    });
+
+  } catch (err) {
+    console.error('Reorder order error:', err);
+    res.status(500).json({ error: 'Failed to process reorder request' });
   }
 };
