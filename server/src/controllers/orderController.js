@@ -268,6 +268,13 @@ exports.updateOrderStatus = async (req, res) => {
 
     const order = orders[0];
     const updates = { status };
+    updates.updated_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    if (status === 'ready') {
+      if (!order.ready_at) {
+        updates.ready_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      }
+    }
 
     if (status === 'delivered') {
       updates.delivered_at = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -497,91 +504,150 @@ exports.changeFulfillment = async (req, res) => {
       return res.status(400).json({ error: 'Invalid delivery type' });
     }
 
-    // Fetch order details
-    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [id]);
-    if (!orders.length) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
+    let order;
 
-    const order = orders[0];
-
-    // Authorization check: Only the customer who placed the order can change it
-    if (order.student_id !== req.user.id) {
-      return res.status(403).json({ error: 'You are not authorized to change this order' });
-    }
-
-    // Status validation: Disable once marked as Out for Delivery, Delivered/Picked Up, or Cancelled
-    const allowedStatuses = ['pending', 'confirmed', 'printing', 'ready'];
-    if (!allowedStatuses.includes(order.status)) {
-      return res.status(400).json({ 
-        error: `Cannot change delivery method. Order is already ${order.status.replace(/_/g, ' ')}.` 
-      });
-    }
-
-    if (order.delivery_type === delivery_type) {
-      return res.status(400).json({ error: `Order is already set to ${delivery_type === 'hostel' ? 'Delivery' : 'Pickup'}` });
-    }
-
-    let updatedFee = 0.00;
-    let updatedPrice = order.total_price;
-    let deliveryQR = order.delivery_qr;
-
-    if (delivery_type === 'hostel') {
-      if (!hostel_address || hostel_address.trim() === '') {
-        return res.status(400).json({ error: 'Delivery address is required for hostel delivery' });
+    const result = await db.transaction(async (conn) => {
+      // 1. Fetch order details inside transaction
+      const [orders] = await conn.execute('SELECT * FROM orders WHERE id = ?', [id]);
+      if (!orders.length) {
+        throw new Error('Order not found');
       }
-      updatedFee = 15.00;
-      updatedPrice = parseFloat((parseFloat(order.total_price) + 15.00).toFixed(2));
-      
-      // Generate delivery QR if not already present
-      if (!deliveryQR) {
-        deliveryQR = await generateQRCode({
-          type: 'delivery',
+      order = orders[0];
+
+      // Authorization check: Only the customer who placed the order can change it
+      if (order.student_id !== req.user.id) {
+        throw new Error('You are not authorized to change this order');
+      }
+
+      // Status validation: Disable once marked as Out for Delivery, Delivered/Picked Up, or Cancelled
+      const allowedStatuses = ['pending', 'confirmed', 'printing', 'ready'];
+      if (!allowedStatuses.includes(order.status)) {
+        throw new Error(`Cannot change delivery method. Order is already ${order.status.replace(/_/g, ' ')}.`);
+      }
+
+      if (order.delivery_type === delivery_type) {
+        throw new Error(`Order is already set to ${delivery_type === 'hostel' ? 'Delivery' : 'Pickup'}`);
+      }
+
+      let updatedFee = 0.00;
+      let updatedPrice = order.total_price;
+      let deliveryQR = order.delivery_qr;
+
+      if (delivery_type === 'hostel') {
+        if (!hostel_address || hostel_address.trim() === '') {
+          throw new Error('Delivery address is required for hostel delivery');
+        }
+        updatedFee = 15.00;
+        updatedPrice = parseFloat((parseFloat(order.total_price) + 15.00).toFixed(2));
+        
+        // Generate delivery QR if not already present
+        if (!deliveryQR) {
+          deliveryQR = await generateQRCode({
+            type: 'delivery',
+            orderId: order.id,
+            hash: order.order_hash,
+            action: 'verify_delivery',
+          });
+        }
+
+        await conn.execute(
+          'UPDATE orders SET delivery_type = ?, hostel_address = ?, delivery_fee = ?, total_price = ?, delivery_qr = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [delivery_type, hostel_address, updatedFee, updatedPrice, deliveryQR, id]
+        );
+      } else {
+        // Switching to Pickup
+        const originalFee = parseFloat(order.delivery_fee || 0);
+        updatedFee = 0.00;
+        updatedPrice = parseFloat((parseFloat(order.total_price) - originalFee).toFixed(2));
+        deliveryQR = null;
+
+        // Reset agent_id and cancel/delete active deliveries
+        await conn.execute(
+          'UPDATE orders SET delivery_type = ?, hostel_address = NULL, delivery_fee = ?, total_price = ?, delivery_qr = NULL, agent_id = NULL, delivery_timeout_notified = 0, ready_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [delivery_type, updatedFee, updatedPrice, id]
+        );
+
+        // Remove from deliveries table
+        await conn.execute('DELETE FROM deliveries WHERE order_id = ?', [id]);
+
+        // Idempotent Refund Check
+        // If order has been paid (status is not pending) and there was a delivery fee
+        if (order.status !== 'pending' && originalFee > 0) {
+          // Lock user row and fetch latest balance
+          const [users] = await conn.execute('SELECT wallet_balance FROM users WHERE id = ?', [order.student_id]);
+          if (users.length) {
+            const currentBalance = parseFloat(users[0].wallet_balance || 0);
+            const newBalance = parseFloat((currentBalance + originalFee).toFixed(2));
+
+            // Update user wallet balance
+            await conn.execute('UPDATE users SET wallet_balance = ? WHERE id = ?', [newBalance, order.student_id]);
+
+            // Insert transaction ledger record
+            const shortHash = order.order_hash.substring(0, 8).toUpperCase();
+            await conn.execute(
+              `INSERT INTO transactions (user_id, type, amount, description, reference_id, balance_after) 
+               VALUES (?, 'credit', ?, ?, ?, ?)`,
+              [
+                order.student_id,
+                'credit',
+                originalFee,
+                `Refund: Delivery fee for order #${shortHash}`,
+                order.order_hash,
+                newBalance
+              ]
+            );
+            console.log(`💰 [Refund] Refunded ₹${originalFee} delivery fee to student ${order.student_id} for order #${shortHash}`);
+          }
+        }
+
+        // Publish outbox event for PickupConversion
+        const crypto = require('crypto');
+        const occurredAtStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const payload = {
           orderId: order.id,
-          hash: order.order_hash,
-          action: 'verify_delivery',
-        });
+          orderHash: order.order_hash,
+          studentId: order.student_id,
+          shopId: order.shop_id,
+          previousFulfillment: 'hostel',
+          newFulfillment: 'pickup'
+        };
+        await conn.execute(
+          `INSERT INTO outbox_events (
+            event_id, event_type, aggregate_type, aggregate_id, payload, 
+            status, retry_count, error_log, correlation_id, event_version, occurred_at
+          ) VALUES (?, 'PICKUP_CONVERSION', 'ORDER', ?, ?, 'PENDING', 0, NULL, ?, 1, ?)`,
+          [
+            crypto.randomUUID(),
+            String(order.id),
+            JSON.stringify(payload),
+            crypto.randomUUID(),
+            occurredAtStr
+          ]
+        );
       }
 
-      await db.execute(
-        'UPDATE orders SET delivery_type = ?, hostel_address = ?, delivery_fee = ?, total_price = ?, delivery_qr = ? WHERE id = ?',
-        [delivery_type, hostel_address, updatedFee, updatedPrice, deliveryQR, id]
-      );
-    } else {
-      // Switching to Pickup
-      updatedFee = 0.00;
-      updatedPrice = parseFloat((parseFloat(order.total_price) - 15.00).toFixed(2));
-      deliveryQR = null;
-
-      // Reset agent_id and cancel/delete active deliveries
-      await db.execute(
-        'UPDATE orders SET delivery_type = ?, hostel_address = NULL, delivery_fee = ?, total_price = ?, delivery_qr = NULL, agent_id = NULL WHERE id = ?',
-        [delivery_type, updatedFee, updatedPrice, id]
-      );
-
-      // Remove from deliveries table
-      await db.execute('DELETE FROM deliveries WHERE order_id = ?', [id]);
-    }
+      return { updatedPrice, updatedFee };
+    });
 
     // Create notifications
     // Notify customer
     const typeLabel = delivery_type === 'hostel' ? 'Hostel Delivery' : 'Self Pickup';
     await db.execute(
       'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-      [order.student_id, 'Delivery Method Changed', `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${updatedPrice.toFixed(0)}`, 'order']
+      [order.student_id, 'Delivery Method Changed', `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${result.updatedPrice.toFixed(0)}`, 'order']
     );
     await sendPushToUser(order.student_id, {
       title: 'Delivery Method Changed',
-      message: `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${updatedPrice.toFixed(0)}`,
+      message: `Fulfillment method changed to ${typeLabel}. Updated Total: ₹${result.updatedPrice.toFixed(0)}`,
       url: '/student/orders',
       tag: `order-${id}`,
     });
 
     // Notify shop
     const [shops] = await db.execute('SELECT user_id FROM shops WHERE id = ?', [order.shop_id]);
+    const shortHash = order.order_hash.substring(0, 8).toUpperCase();
     if (shops.length) {
       const shopUserId = shops[0].user_id;
-      const shortHash = order.order_hash.substring(0, 8).toUpperCase();
       await db.execute(
         'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
         [shopUserId, '🔄 Order Update', `Order #${shortHash} changed to ${typeLabel}`, 'order']
@@ -594,15 +660,24 @@ exports.changeFulfillment = async (req, res) => {
       });
     }
 
+    // Notify admins
+    const [admins] = await db.execute("SELECT id FROM users WHERE role = 'admin'");
+    for (const admin of admins) {
+      await db.execute(
+        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
+        [admin.id, '🔄 Order Update', `Order #${shortHash} changed to ${typeLabel}`, 'order']
+      );
+    }
+
     res.json({ 
       message: 'Delivery method updated successfully', 
       delivery_type, 
-      total_price: updatedPrice, 
-      delivery_fee: updatedFee 
+      total_price: result.updatedPrice, 
+      delivery_fee: result.updatedFee 
     });
   } catch (err) {
     console.error('Change fulfillment error:', err);
-    res.status(500).json({ error: 'Failed to update delivery method' });
+    res.status(400).json({ error: err.message || 'Failed to update delivery method' });
   }
 };
 

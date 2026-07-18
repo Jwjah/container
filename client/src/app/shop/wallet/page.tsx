@@ -5,12 +5,14 @@ import api from '@/lib/api';
 import { motion } from 'framer-motion';
 import { StaggerContainer, StaggerItem, HoverCard } from '@/components/animations';
 import { HiOutlineFilter, HiOutlineCash, HiOutlineArrowCircleDown, HiOutlineArrowCircleUp } from 'react-icons/hi';
+import WithdrawalModal from '@/components/WithdrawalModal';
 
 export default function ShopWalletPage() {
   const [shop, setShop] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ type: '', startDate: '', endDate: '' });
+  const [modalOpen, setModalOpen] = useState(false);
 
   const loadData = async (background = false) => {
     if (!background) setLoading(true);
@@ -46,8 +48,15 @@ export default function ShopWalletPage() {
             <div style={{ fontSize: 64, fontWeight: 900, background: 'linear-gradient(135deg, var(--success), #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               ₹{parseFloat(shop?.wallet_balance || 0).toFixed(2)}
             </div>
-            <button className="btn btn-primary" style={{ marginTop: 24 }}>Withdraw Earnings</button>
+            <button className="btn btn-primary" style={{ marginTop: 24 }} onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
           </motion.div>
+
+          <WithdrawalModal 
+            isOpen={modalOpen} 
+            onClose={() => setModalOpen(false)} 
+            availableBalance={parseFloat(shop?.wallet_balance || 0)} 
+            onSuccess={() => loadData(true)} 
+          />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 style={{ fontSize: 18, fontWeight: 700 }}>Transaction History</h3>

@@ -14,7 +14,7 @@ import {
   HiOutlineBell, HiOutlineMenu, HiOutlineX, HiOutlineChartBar,
   HiOutlineUserGroup, HiOutlineShoppingBag, HiOutlineTruck,
   HiOutlineCurrencyDollar, HiOutlineLocationMarker, HiOutlineQrcode,
-  HiOutlineClock,
+  HiOutlineClock, HiOutlineCash,
 } from 'react-icons/hi';
 
 interface NavItem {
@@ -54,6 +54,7 @@ const roleNavItems: Record<string, NavItem[]> = {
     { href: '/admin/users', icon: <HiOutlineUserGroup size={20} />, label: 'Users' },
     { href: '/admin/shops', icon: <HiOutlineShoppingBag size={20} />, label: 'Shops' },
     { href: '/admin/orders', icon: <HiOutlineDocumentText size={20} />, label: 'Orders' },
+    { href: '/admin/withdrawals', icon: <HiOutlineCash size={20} />, label: 'Withdrawals' },
     { href: '/admin/notifications', icon: <HiOutlineBell size={20} />, label: 'Notifications' },
     { href: '/admin/danger', icon: <HiOutlineCog size={20} />, label: 'Danger Zone' },
   ],

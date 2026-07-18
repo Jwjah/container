@@ -221,6 +221,11 @@ export default function OrdersPage() {
                     </div>
                     <span className={`badge ${statusColors[order.status]}`}>{statusLabels[order.status]}</span>
                   </div>
+                  {order.status === 'ready' && order.delivery_type === 'hostel' && order.delivery_timeout_notified === 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 12 }}>
+                      <span className="badge badge-cancelled" style={{ fontSize: 11, fontWeight: 700 }}>⚠️ No Delivery Partner Available</span>
+                    </div>
+                  )}
 
                   {/* Progress tracker */}
                   {order.status !== 'cancelled' && (
@@ -307,6 +312,33 @@ export default function OrdersPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {selected.status === 'ready' && selected.delivery_type === 'hostel' && selected.delivery_timeout_notified === 1 && (
+              <div className="glass-card" style={{ padding: 20, border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 12, marginTop: 24, textAlign: 'center' }}>
+                <div style={{ color: 'var(--error)', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>🚨 No Delivery Partner Available</div>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 16 }}>
+                  No delivery partners are available near the shop right now. You can switch to Self Pickup to collect the order yourself, and the delivery fee (₹15) will be refunded to your wallet.
+                </p>
+                <TapButton 
+                  className="btn btn-primary" 
+                  style={{ background: 'linear-gradient(135deg, var(--success), #16a34a)', width: '100%' }}
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.patch(`/orders/${selected.id}/change-fulfillment`, {
+                        delivery_type: 'pickup'
+                      });
+                      toast.success('Switched to Self Pickup! Delivery fee refunded.');
+                      setSelected({ ...selected, delivery_type: 'pickup', total_price: data.total_price });
+                      loadOrders(true);
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error || 'Failed to switch to Self Pickup');
+                    }
+                  }}
+                >
+                  🏪 Switch to Self Pickup
+                </TapButton>
               </div>
             )}
 

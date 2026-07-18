@@ -134,17 +134,33 @@ if (USE_SQLITE) {
       };
     },
     transaction: async (callback) => {
-      const conn = await db.getConnection();
-      try {
-        await conn.beginTransaction();
-        const result = await callback(conn);
-        await conn.commit();
-        return result;
-      } catch (err) {
-        await conn.rollback();
-        throw err;
-      } finally {
-        conn.release();
+      let retries = 3;
+      let delay = 100; // ms
+      while (true) {
+        const conn = await db.getConnection();
+        try {
+          await conn.beginTransaction();
+          const result = await callback(conn);
+          await conn.commit();
+          return result;
+        } catch (err) {
+          await conn.rollback();
+          const isLocked = err.message && (
+            err.message.includes('database is locked') || 
+            err.message.includes('SQLITE_BUSY') || 
+            err.code === 'SQLITE_BUSY'
+          );
+          if (isLocked && retries > 0) {
+            retries--;
+            console.warn(`⚠️ SQLite database locked, retrying transaction in ${delay}ms... (${retries} retries left)`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            delay *= 2; // exponential backoff
+          } else {
+            throw err;
+          }
+        } finally {
+          conn.release();
+        }
       }
     }
   };

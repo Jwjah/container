@@ -44,6 +44,7 @@ export default function NewOrderPage() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
+  const [agreedToDisclaimer, setAgreedToDisclaimer] = useState(false);
 
   const loadShops = () => {
     api.get('/shops').then(({ data }) => setShops(data.shops || [])).catch(() => {});
@@ -77,11 +78,20 @@ export default function NewOrderPage() {
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
-
   const handleSubmit = async () => {
     if (!selectedShop || files.length === 0) {
       toast.error('Select a shop and upload files');
       return;
+    }
+    if (config.delivery_type === 'hostel') {
+      if (!config.hostel_address || config.hostel_address.trim() === '') {
+        toast.error('Hostel delivery address is required');
+        return;
+      }
+      if (!agreedToDisclaimer) {
+        toast.error('You must agree to the delivery disclaimer warning');
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -297,11 +307,44 @@ export default function NewOrderPage() {
                   <div className="input-group"><label>Binding Option</label><select className="input" value={config.binding_type} onChange={(e) => setConfig({ ...config, binding_type: e.target.value })}><option value="none">None</option><option value="staple">Staple</option><option value="spiral">Spiral Binding (+₹30)</option></select></div>
                   <div className="input-group"><label>Copies</label><input className="input" type="number" min={1} value={config.copies} onChange={(e) => setConfig({ ...config, copies: parseInt(e.target.value) || 1 })} /></div>
                   <div className="input-group"><label>Delivery Preference</label><select className="input" value={config.delivery_type} onChange={(e) => setConfig({ ...config, delivery_type: e.target.value })}><option value="pickup">🏪 Pickup</option><option value="hostel">🏠 Hostel Delivery (+₹15)</option></select></div>
+                  
+                  {config.delivery_type === 'hostel' && (
+                    <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                      <label>Hostel Delivery Address *</label>
+                      <input 
+                        className="input" 
+                        type="text" 
+                        placeholder="e.g. Hostel A, Room 101" 
+                        value={config.hostel_address} 
+                        onChange={e => setConfig({ ...config, hostel_address: e.target.value })} 
+                        required 
+                      />
+                    </div>
+                  )}
                 </div>
+                
+                {config.delivery_type === 'hostel' && (
+                  <div className="glass-card" style={{ padding: 16, border: '1px solid rgba(245, 158, 11, 0.3)', background: 'rgba(245, 158, 11, 0.05)', borderRadius: 8, marginTop: 20 }}>
+                    <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>⚠️ Delivery Availability Disclaimer</div>
+                    <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                      Delivery is subject to the availability of delivery partners. If no delivery partner accepts your order, you may be requested to switch to Self Pickup from the selected print shop. CampusPrint facilitates delivery but cannot guarantee delivery availability at all times.
+                    </p>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)' }}>
+                      <input type="checkbox" checked={agreedToDisclaimer} onChange={e => setAgreedToDisclaimer(e.target.checked)} style={{ width: 16, height: 16 }} />
+                      I understand and agree.
+                    </label>
+                  </div>
+                )}
             </div>
             <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between' }}>
               <TapButton className="btn btn-secondary" onClick={() => setStep(2)}>← Back</TapButton>
-              <TapButton className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={loading}>{loading ? 'Placing...' : '🖨️ Place Order'}</TapButton>
+              <TapButton 
+                className="btn btn-primary btn-lg" 
+                onClick={handleSubmit} 
+                disabled={loading || (config.delivery_type === 'hostel' && !agreedToDisclaimer)}
+              >
+                {loading ? 'Placing...' : '🖨️ Place Order'}
+              </TapButton>
             </div>
           </motion.div>
         )}

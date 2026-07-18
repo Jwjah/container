@@ -184,7 +184,17 @@ export default function QueuePage() {
                     <span>{order.print_type === 'color' ? '🌈 Color' : '⬛ B&W'}</span>
                     <span>{order.layout === 'double' ? '📖 Double' : '📃 Single'}</span>
                     {order.binding ? <span>📚 Binding</span> : null}
-                    <span>{order.delivery_type === 'hostel' ? '🚀 Delivery' : '🏪 Pickup'}</span>
+                    <span>
+                      {order.delivery_type === 'hostel' ? (
+                        order.delivery_timeout_notified === 1 ? (
+                          <span style={{ color: '#f59e0b', fontWeight: 700 }}>🏪 Waiting for Student Pickup (Agent Timeout)</span>
+                        ) : (
+                          <span>🚀 Delivery (Waiting for Delivery Agent)</span>
+                        )
+                      ) : (
+                        '🏪 Pickup (Waiting for Student Pickup)'
+                      )}
+                    </span>
                   </div>
 
                   {order.notes && (

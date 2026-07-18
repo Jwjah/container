@@ -15,7 +15,17 @@ import { NotificationService } from './application/services/NotificationService'
 import { NotificationEventSource } from './worker/NotificationEventSource';
 import { NotificationEventDispatcher } from './worker/NotificationEventDispatcher';
 import { NotificationEventWorker } from './worker/NotificationEventWorker';
-import { OrderCreatedHandler, PaymentConfirmedHandler, LowStockHandler } from './application/events/NotificationEventHandlers';
+import {
+  OrderCreatedHandler,
+  PaymentConfirmedHandler,
+  LowStockHandler,
+  WithdrawalRequestedHandler,
+  WithdrawalApprovedHandler,
+  WithdrawalRejectedHandler,
+  WithdrawalCompletedHandler,
+  DeliveryTimeoutHandler,
+  PickupConversionHandler
+} from './application/events/NotificationEventHandlers';
 
 import { ReplayProgressTracker } from './application/replay/ReplayProgressTracker';
 import { NotificationReplayWorker } from './application/replay/NotificationReplayWorker';
@@ -53,6 +63,12 @@ export class NotificationModule {
     dispatcher.register('ORDER_CREATED', new OrderCreatedHandler(notifService));
     dispatcher.register('PAYMENT_CONFIRMED', new PaymentConfirmedHandler(notifService));
     dispatcher.register('LOW_STOCK', new LowStockHandler(notifService));
+    dispatcher.register('WITHDRAWAL_REQUESTED', new WithdrawalRequestedHandler(notifService));
+    dispatcher.register('WITHDRAWAL_APPROVED', new WithdrawalApprovedHandler(notifService));
+    dispatcher.register('WITHDRAWAL_REJECTED', new WithdrawalRejectedHandler(notifService));
+    dispatcher.register('WITHDRAWAL_COMPLETED', new WithdrawalCompletedHandler(notifService));
+    dispatcher.register('DELIVERY_TIMEOUT', new DeliveryTimeoutHandler(notifService));
+    dispatcher.register('PICKUP_CONVERSION', new PickupConversionHandler(notifService));
 
     // Polling event worker
     const worker = new NotificationEventWorker(eventSource, dispatcher, 1000, 10);

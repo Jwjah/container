@@ -625,6 +625,41 @@ const migrate = async () => {
       last_event_sequence INTEGER NOT NULL DEFAULT 0,
       state_data TEXT NOT NULL,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS payout_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      method TEXT NOT NULL,
+      account_holder_name TEXT DEFAULT NULL,
+      bank_name TEXT DEFAULT NULL,
+      account_number TEXT DEFAULT NULL,
+      ifsc TEXT DEFAULT NULL,
+      upi_id TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS wallet_withdrawals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      withdrawal_id TEXT NOT NULL UNIQUE,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      user_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      status TEXT NOT NULL,
+      payout_method TEXT NOT NULL,
+      payout_details TEXT NOT NULL,
+      rejection_reason TEXT DEFAULT NULL,
+      completed_by INTEGER DEFAULT NULL,
+      completed_at TEXT DEFAULT NULL,
+      reference_number TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (completed_by) REFERENCES users(id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS withdrawal_number_sequence (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      stub CHAR(1) NOT NULL UNIQUE
     )`
   ];
 
@@ -1271,6 +1306,41 @@ const migrate = async () => {
       last_event_sequence INT NOT NULL DEFAULT 0,
       state_data LONGTEXT NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS payout_accounts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL UNIQUE,
+      method VARCHAR(20) NOT NULL,
+      account_holder_name VARCHAR(255) DEFAULT NULL,
+      bank_name VARCHAR(255) DEFAULT NULL,
+      account_number VARCHAR(100) DEFAULT NULL,
+      ifsc VARCHAR(50) DEFAULT NULL,
+      upi_id VARCHAR(255) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS wallet_withdrawals (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      withdrawal_id VARCHAR(100) NOT NULL UNIQUE,
+      idempotency_key VARCHAR(100) NOT NULL UNIQUE,
+      user_id INT NOT NULL,
+      amount DECIMAL(12,2) NOT NULL,
+      status VARCHAR(50) NOT NULL,
+      payout_method VARCHAR(20) NOT NULL,
+      payout_details TEXT NOT NULL,
+      rejection_reason TEXT DEFAULT NULL,
+      completed_by INT DEFAULT NULL,
+      completed_at TIMESTAMP NULL DEFAULT NULL,
+      reference_number VARCHAR(255) DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (completed_by) REFERENCES users(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+    `CREATE TABLE IF NOT EXISTS withdrawal_number_sequence (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      stub CHAR(1) NOT NULL UNIQUE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   ];
 
@@ -1310,7 +1380,11 @@ const migrate = async () => {
     `ALTER TABLE print_jobs ADD COLUMN cancellation_description TEXT DEFAULT NULL`,
     `ALTER TABLE orders ADD COLUMN order_id VARCHAR(255) DEFAULT NULL`,
     `ALTER TABLE orders ADD COLUMN payment_status VARCHAR(50) DEFAULT 'UNPAID'`,
-    `ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'system'`
+    `ALTER TABLE notifications MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'system'`,
+    `ALTER TABLE users ADD COLUMN held_balance DECIMAL(12,2) DEFAULT 0.00`,
+    `ALTER TABLE shops ADD COLUMN held_balance DECIMAL(12,2) DEFAULT 0.00`,
+    `ALTER TABLE orders ADD COLUMN delivery_timeout_notified INTEGER DEFAULT 0`,
+    `ALTER TABLE orders ADD COLUMN ready_at TEXT DEFAULT NULL`
   ];
   for (const q of alterQueries) {
     try { await db.execute(q); } catch (e) { } // Ignore if column already exists or command unsupported

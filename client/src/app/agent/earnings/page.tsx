@@ -4,14 +4,29 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import api from '@/lib/api';
 import { StaggerContainer, StaggerItem, HoverCard } from '@/components/animations';
+import { HiOutlineArrowCircleDown, HiOutlineArrowCircleUp } from 'react-icons/hi';
+import WithdrawalModal from '@/components/WithdrawalModal';
 
 export default function AgentEarningsPage() {
-  const [data, setData] = useState<any>({ total_earned: 0, total_deliveries: 0, recent_transactions: [] });
+  const [data, setData] = useState<any>({ total_earned: 0, total_deliveries: 0 });
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
 
-  const loadData = (background = false) => {
+  const loadData = async (background = false) => {
     if (!background) setLoading(true);
-    api.get('/agent/earnings').then(({ data }) => setData(data.earnings || {})).catch(() => {}).finally(() => setLoading(false));
+    try {
+      const [earnRes, transRes] = await Promise.all([
+        api.get('/agent/earnings'),
+        api.get('/auth/transactions')
+      ]);
+      setData(earnRes.data.earnings || { total_earned: 0, total_deliveries: 0 });
+      setTransactions(transRes.data.transactions || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -34,8 +49,9 @@ export default function AgentEarningsPage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, marginBottom: 32 }}>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card" style={{ padding: 32, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1), transparent)', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-              <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Total Earnings</div>
-              <div style={{ fontSize: 48, fontWeight: 900, color: 'var(--success)' }}>₹{parseFloat(data.total_earned || 0).toFixed(0)}</div>
+              <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Available Balance</div>
+              <div style={{ fontSize: 48, fontWeight: 900, color: 'var(--success)', marginBottom: 16 }}>₹{parseFloat(data.total_earned || 0).toFixed(2)}</div>
+              <button className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>Withdraw Earnings</button>
             </motion.div>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card" style={{ padding: 32 }}>
               <div style={{ color: 'var(--text-tertiary)', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Total Deliveries</div>
@@ -43,24 +59,43 @@ export default function AgentEarningsPage() {
             </motion.div>
           </div>
 
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Recent Transactions</h3>
-          {data.recent_transactions?.length === 0 ? (
-            <div className="glass-card empty-state">No earnings yet. Complete a delivery to earn!</div>
+          <WithdrawalModal 
+            isOpen={modalOpen} 
+            onClose={() => setModalOpen(false)} 
+            availableBalance={parseFloat(data.total_earned || 0)} 
+            onSuccess={() => loadData(true)} 
+          />
+
+          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Transaction History</h3>
+          {transactions.length === 0 ? (
+            <div className="glass-card empty-state">No transactions yet. Complete a delivery to earn!</div>
           ) : (
             <StaggerContainer style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {data.recent_transactions?.map((t: any, i: number) => (
+              {transactions.map((t: any, i: number) => (
                 <StaggerItem key={i}>
-                  <HoverCard className="glass-card" style={{ padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(34, 197, 94, 0.1)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                        +
+                  <HoverCard className="glass-card" style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ 
+                        width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: t.type === 'credit' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                      }}>
+                        {t.type === 'credit' ? <HiOutlineArrowCircleUp size={20} /> : <HiOutlineArrowCircleDown size={20} />}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700 }}>Order #{t.order_id || t.order_hash?.substring(0, 8)?.toUpperCase()}</div>
-                        <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{new Date(t.created_at).toLocaleDateString()}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{t.description}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{new Date(t.created_at).toLocaleString()}</div>
                       </div>
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 18, color: 'var(--success)' }}>₹{parseFloat(t.amount).toFixed(0)}</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ 
+                        fontSize: 15, fontWeight: 700, 
+                        color: t.type === 'credit' ? 'var(--success)' : 'var(--error)'
+                      }}>
+                        {t.type === 'credit' ? '+' : '-'}₹{parseFloat(t.amount).toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Balance: ₹{parseFloat(t.balance_after || 0).toFixed(2)}</div>
+                    </div>
                   </HoverCard>
                 </StaggerItem>
               ))}

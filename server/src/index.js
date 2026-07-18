@@ -49,6 +49,7 @@ app.use('/api/orders', require('./routes/orders'));
 app.use('/api/shops', require('./routes/shops'));
 app.use('/api/agent', require('./routes/agent'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/withdrawals', require('./routes/withdrawal'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/push', require('./routes/push'));
 const paymentsRouter = require('./payments/routes/payments').default;
@@ -99,6 +100,75 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
+// Background Delivery Timeout Checker
+const startDeliveryTimeoutChecker = () => {
+  const db = require('./config/database');
+  const crypto = require('crypto');
+  
+  setInterval(async () => {
+    try {
+      const timeoutMinutes = parseInt(process.env.DELIVERY_TIMEOUT_MINUTES || '15', 10);
+      const cutoffTime = new Date(Date.now() - timeoutMinutes * 60000).toISOString().slice(0, 19).replace('T', ' ');
+      
+      // Select orders that have timed out
+      // status = 'ready', delivery_type = 'hostel', agent_id = null, delivery_timeout_notified = 0, ready_at < cutoffTime
+      const [orders] = await db.execute(
+        `SELECT * FROM orders 
+         WHERE status = 'ready' 
+           AND delivery_type = 'hostel' 
+           AND agent_id IS NULL 
+           AND delivery_timeout_notified = 0 
+           AND ready_at IS NOT NULL 
+           AND ready_at < ?`,
+        [cutoffTime]
+      );
+      
+      for (const order of orders) {
+        await db.transaction(async (conn) => {
+          // Double check status and columns inside transaction
+          const [[freshOrder]] = await conn.execute('SELECT * FROM orders WHERE id = ?', [order.id]);
+          if (!freshOrder || freshOrder.status !== 'ready' || freshOrder.agent_id !== null || freshOrder.delivery_timeout_notified !== 0) {
+            return;
+          }
+          
+          // Mark order as timeout notified
+          await conn.execute(
+            'UPDATE orders SET delivery_timeout_notified = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [order.id]
+          );
+          
+          // Publish outbox event DELIVERY_TIMEOUT
+          const occurredAtStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          const payload = {
+            orderId: order.id,
+            orderHash: order.order_hash,
+            studentId: order.student_id,
+            shopId: order.shop_id
+          };
+          
+          await conn.execute(
+            `INSERT INTO outbox_events (
+              event_id, event_type, aggregate_type, aggregate_id, payload, 
+              status, retry_count, error_log, correlation_id, event_version, occurred_at
+            ) VALUES (?, 'DELIVERY_TIMEOUT', 'ORDER', ?, ?, 'PENDING', 0, NULL, ?, 1, ?)`,
+            [
+              crypto.randomUUID(),
+              String(order.id),
+              JSON.stringify(payload),
+              crypto.randomUUID(),
+              occurredAtStr
+            ]
+          );
+          
+          console.log(`⏰ [Delivery Timeout] Triggered for Order #${order.order_hash}`);
+        });
+      }
+    } catch (err) {
+      console.error('❌ Error in delivery timeout checker:', err);
+    }
+  }, 30000); // Check every 30 seconds
+};
+
 const PORT = originalPort || process.env.PORT || 5000;
 const migrate = require('./migrations/migrate');
 
@@ -108,6 +178,9 @@ migrate()
       console.log(`\n🚀 CampusPrint API running on port ${PORT}`);
       console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`   Client URL:  ${process.env.CLIENT_URL}\n`);
+      
+      // Start timeout checker
+      startDeliveryTimeoutChecker();
     });
   })
   .catch(err => {
