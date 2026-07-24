@@ -34,4 +34,8 @@ ENV STIRLING_ENGINE_PORT=5001
 
 EXPOSE 5001
 
+USER nobody
 CMD ["task", "engine:run"]
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 USER nobody
+CMD curl -f http://localhost:8080/ || exit 1

@@ -49,7 +49,7 @@ type StubFixtures = {
 // Minimal JWT-shaped value — the proprietary auth client only checks for
 // the token's *presence* in localStorage before treating the user as
 // logged-in; the stubbed `/auth/me` route supplies the actual user.
-const STUB_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdHViLXVzZXIifQ.signature";
+const STUB_JWT = "MOCK_JWT_TOKEN";
 
 export const test = base.extend<StubFixtures>({
   stubOptions: [{}, { option: true }],

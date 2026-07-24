@@ -67,7 +67,7 @@ public class RestartHelper {
 
         } catch (Exception e) {
             System.err.println("[restart-helper] ERROR: " + e.getMessage());
-            e.printStackTrace();
+            // e.printStackTrace();
             System.exit(2);
         }
     }

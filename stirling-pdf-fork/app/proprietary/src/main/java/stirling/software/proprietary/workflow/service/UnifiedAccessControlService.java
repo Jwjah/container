@@ -39,7 +39,7 @@ public class UnifiedAccessControlService {
      * shares and workflow participant shares.
      */
     public AccessValidationResult validateToken(String token, User user) {
-        log.debug("Validating access token: {}", token);
+        log.debug("Redacted sensitive log");
 
         // First try as file share token
         Optional<FileShare> fileShareOpt = fileShareRepository.findByShareTokenWithFile(token);
@@ -54,7 +54,7 @@ public class UnifiedAccessControlService {
             return validateParticipant(participantOpt.get(), user);
         }
 
-        log.warn("Invalid or expired token: {}", token);
+        log.warn("Redacted sensitive log");
         return AccessValidationResult.denied("Invalid or expired access token");
     }
 
@@ -62,7 +62,7 @@ public class UnifiedAccessControlService {
     private AccessValidationResult validateGenericShare(FileShare share, User user) {
         // Check expiration
         if (share.getExpiresAt() != null && LocalDateTime.now().isAfter(share.getExpiresAt())) {
-            log.warn("Share token expired: {}", share.getShareToken());
+            log.warn("Redacted sensitive log");
             return AccessValidationResult.denied("Access link has expired");
         }
 
@@ -82,7 +82,7 @@ public class UnifiedAccessControlService {
     private AccessValidationResult validateParticipant(WorkflowParticipant participant, User user) {
         // Check expiration
         if (participant.isExpired()) {
-            log.warn("Workflow participant access expired: {}", participant.getShareToken());
+            log.warn("Redacted sensitive log");
             return AccessValidationResult.denied("Workflow access has expired");
         }
 
@@ -130,7 +130,7 @@ public class UnifiedAccessControlService {
                 // Active participants retain their assigned role
                 return participant.getAccessRole();
             default:
-                log.warn("Unknown participant status: {}", status);
+                log.warn("Redacted sensitive log");
                 return ShareAccessRole.VIEWER;
         }
     }

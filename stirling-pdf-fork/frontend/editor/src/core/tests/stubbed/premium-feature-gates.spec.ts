@@ -57,7 +57,7 @@ test.describe("Premium / endpoint gating", () => {
     await page.addInitScript(() => {
       localStorage.setItem(
         "stirling_jwt",
-        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.signature",
+        "MOCK_JWT_TOKEN",
       );
     });
     await mockAppApis(page, {

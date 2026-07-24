@@ -658,3 +658,6 @@ LABEL org.opencontainers.image.title="Stirling-PDF Base" \
       org.opencontainers.image.documentation="https://docs.stirlingpdf.com" \
       maintainer="Stirling-Tools" \
       org.opencontainers.image.authors="Stirling-Tools"
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 USER nobody
+CMD curl -f http://localhost:8080/ || exit 1

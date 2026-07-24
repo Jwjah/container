@@ -42,3 +42,6 @@ EXPOSE 80
 ENV VITE_API_BASE_URL=http://backend:8080
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 USER nobody
+CMD curl -f http://localhost:8080/ || exit 1

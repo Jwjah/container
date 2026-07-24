@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from stirling.api.engine_auth import EngineSharedSecretMiddleware
 
-SECRET = "s3cr3t-between-java-and-engine"
+SECRET = "YOUR_SECRET_KEY"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 

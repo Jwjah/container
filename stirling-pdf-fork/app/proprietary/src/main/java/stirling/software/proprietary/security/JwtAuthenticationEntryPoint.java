@@ -27,7 +27,7 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
             response.setCharacterEncoding("UTF-8");
             String message =
                     authException != null ? authException.getMessage() : "Authentication required";
-            response.getWriter().write("{\"error\":\"" + message + "\"}");
+            response.getWriter().write(org.springframework.web.util.HtmlUtils.htmlEscape("{\"error\":\"" + message + "\"}"));
         } else {
             // For non-API requests, use default behavior
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, authException.getMessage());

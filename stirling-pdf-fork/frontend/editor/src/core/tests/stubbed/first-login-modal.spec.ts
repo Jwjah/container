@@ -19,7 +19,7 @@ async function setUpFirstLoginPage(page: Page) {
       "stirling_jwt",
       // Minimal JWT-shape value — the proprietary client only checks presence
       // before deciding to call /account, then trusts the API mocks.
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.signature",
+      "MOCK_JWT_TOKEN",
     );
   });
   // Note: deliberately NOT calling skipOnboarding here.

@@ -10,6 +10,7 @@ import sys
 import argparse
 import os
 import subprocess
+import shlex
 from pathlib import Path
 import time
 
@@ -23,7 +24,7 @@ def run_command(cmd, description=""):
         print(f"Step: {description}")
         print(f"{'=' * 60}")
 
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(shlex.split(cmd) if isinstance(cmd, str) else cmd, shell=False, capture_output=True, text=True)
 
     if result.stdout:
         print(result.stdout)

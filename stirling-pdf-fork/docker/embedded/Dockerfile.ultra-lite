@@ -122,4 +122,8 @@ EXPOSE 8080/tcp
 
 # Set user and run command
 ENTRYPOINT ["tini", "--", "/scripts/init-without-ocr.sh"]
+USER nobody
 CMD []
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 USER nobody
+CMD curl -f http://localhost:8080/ || exit 1

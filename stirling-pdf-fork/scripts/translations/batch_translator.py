@@ -93,6 +93,7 @@ Return ONLY the translated JSON. No markdown, no explanations, just the JSON obj
             # GPT-5 only supports temperature=1, so we don't include it
             response = self.client.chat.completions.create(
                 model=self.model,
+                max_tokens=4096,
                 messages=[
                     {
                         "role": "system",

@@ -23,7 +23,7 @@ async function setUpAdminPage(
   await page.addInitScript(() => {
     localStorage.setItem(
       "stirling_jwt",
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.signature",
+      "MOCK_JWT_TOKEN",
     );
   });
   await mockAppApis(page, {

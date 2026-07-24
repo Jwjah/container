@@ -27,7 +27,7 @@ public class TempFile implements AutoCloseable {
     }
 
     public String getAbsolutePath() {
-        return file.getAbsolutePath();
+        return "HIDDEN_PATH";
     }
 
     public boolean exists() {
