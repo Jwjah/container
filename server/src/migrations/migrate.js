@@ -1400,16 +1400,16 @@ const migrate = async () => {
     `ALTER TABLE orders ADD COLUMN delivery_timeout_notified INTEGER DEFAULT 0`,
     `ALTER TABLE orders ADD COLUMN ready_at TEXT DEFAULT NULL`,
     `ALTER TABLE transactions MODIFY COLUMN type ENUM('credit', 'debit', 'settlement') NOT NULL`,
-    `ALTER TABLE orders ADD COLUMN finishing_type TEXT DEFAULT 'none'`,
-    `ALTER TABLE orders ADD COLUMN finishing_price REAL DEFAULT 0.00`,
-    `ALTER TABLE shops ADD COLUMN price_stick_file REAL DEFAULT 10.00`,
-    `ALTER TABLE orders ADD COLUMN price_bw_used REAL DEFAULT 2.00`,
-    `ALTER TABLE orders ADD COLUMN price_color_used REAL DEFAULT 5.00`,
-    `ALTER TABLE orders ADD COLUMN price_binding_used REAL DEFAULT 30.00`,
-    `ALTER TABLE orders ADD COLUMN price_stick_file_used REAL DEFAULT 10.00`
+    `ALTER TABLE orders ADD COLUMN finishing_type VARCHAR(50) DEFAULT 'none'`,
+    `ALTER TABLE orders ADD COLUMN finishing_price DECIMAL(10,2) DEFAULT 0.00`,
+    `ALTER TABLE shops ADD COLUMN price_stick_file DECIMAL(10,2) DEFAULT 10.00`,
+    `ALTER TABLE orders ADD COLUMN price_bw_used DECIMAL(10,2) DEFAULT 2.00`,
+    `ALTER TABLE orders ADD COLUMN price_color_used DECIMAL(10,2) DEFAULT 5.00`,
+    `ALTER TABLE orders ADD COLUMN price_binding_used DECIMAL(10,2) DEFAULT 30.00`,
+    `ALTER TABLE orders ADD COLUMN price_stick_file_used DECIMAL(10,2) DEFAULT 10.00`
   ];
   for (const q of alterQueries) {
-    try { await db.execute(q); } catch (e) { } // Ignore if column already exists or command unsupported
+    try { await db.execute(q); } catch (e) { console.warn('Alter table warning:', e.message); } // Ignore if column already exists or command unsupported
   }
 
   // Seed super admin
