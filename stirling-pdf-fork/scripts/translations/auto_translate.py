@@ -154,11 +154,19 @@ def translate_batches(batch_files, language_code, api_key, timeout=600):
         print(f"\n[{i}/{len(batch_files)}] Translating {batch_file}...")
 
         # Always pass API key since it's required
-        cmd = f'python3 scripts/translations/batch_translator.py "{batch_file}" --language {language_code} --api-key "{api_key}"'
+        cmd = [
+            "python3",
+            "scripts/translations/batch_translator.py",
+            batch_file,
+            "--language",
+            language_code,
+            "--api-key",
+            api_key
+        ]
 
         # Run with timeout
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout
+            cmd, shell=False, capture_output=True, text=True, timeout=timeout
         )
 
         if result.stdout:
