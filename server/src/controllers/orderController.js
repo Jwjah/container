@@ -744,7 +744,12 @@ exports.downloadPrintPdf = async (req, res) => {
       try {
         let localPath = file.file_path;
         if (!path.isAbsolute(localPath)) {
-          localPath = path.join(__dirname, '../..', localPath);
+          const isVercel = !!process.env.VERCEL;
+          if (isVercel) {
+            localPath = path.join('/tmp', localPath);
+          } else {
+            localPath = path.join(__dirname, '../..', localPath);
+          }
         }
         pdfBuffer = fs.readFileSync(localPath);
       } catch (fetchErr) {

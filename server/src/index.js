@@ -40,7 +40,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Static files (uploads)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const isVercel = !!process.env.VERCEL;
+const uploadStaticPath = isVercel ? '/tmp/uploads' : path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadStaticPath));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

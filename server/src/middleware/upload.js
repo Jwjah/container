@@ -45,12 +45,14 @@ const upload = multer({
  * Returns { url, public_id }
  */
 const uploadToCloudinary = (fileBuffer, originalName) => {
+  const isVercel = !!process.env.VERCEL;
+  const fs = require('fs');
+  const path = require('path');
+  const uploadPath = isVercel ? '/tmp/uploads' : path.join(__dirname, '../../uploads');
+
   if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
     console.log('Cloudinary not configured. Using local filesystem fallback.');
-    const fs = require('fs');
-    const path = require('path');
     const filename = `${uuidv4()}-${originalName}`;
-    const uploadPath = path.join(__dirname, '../../uploads');
     fs.mkdirSync(uploadPath, { recursive: true });
     fs.writeFileSync(path.join(uploadPath, filename), fileBuffer);
     return Promise.resolve({
@@ -70,10 +72,7 @@ const uploadToCloudinary = (fileBuffer, originalName) => {
       (error, result) => {
         if (error) {
           console.warn('Cloudinary upload error, falling back to local filesystem:', error);
-          const fs = require('fs');
-          const path = require('path');
           const filename = `${uuidv4()}-${originalName}`;
-          const uploadPath = path.join(__dirname, '../../uploads');
           fs.mkdirSync(uploadPath, { recursive: true });
           fs.writeFileSync(path.join(uploadPath, filename), fileBuffer);
           resolve({
