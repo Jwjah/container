@@ -45,6 +45,20 @@ const upload = multer({
  * Returns { url, public_id }
  */
 const uploadToCloudinary = (fileBuffer, originalName) => {
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.log('Cloudinary not configured. Using local filesystem fallback.');
+    const fs = require('fs');
+    const path = require('path');
+    const filename = `${uuidv4()}-${originalName}`;
+    const uploadPath = path.join(__dirname, '../../uploads');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    fs.writeFileSync(path.join(uploadPath, filename), fileBuffer);
+    return Promise.resolve({
+      url: `/uploads/${filename}`,
+      public_id: filename
+    });
+  }
+
   return new Promise((resolve, reject) => {
     const uniqueName = `campusprint/${uuidv4()}`;
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -55,8 +69,17 @@ const uploadToCloudinary = (fileBuffer, originalName) => {
       },
       (error, result) => {
         if (error) {
-          console.error('Cloudinary upload error:', error);
-          reject(error);
+          console.warn('Cloudinary upload error, falling back to local filesystem:', error);
+          const fs = require('fs');
+          const path = require('path');
+          const filename = `${uuidv4()}-${originalName}`;
+          const uploadPath = path.join(__dirname, '../../uploads');
+          fs.mkdirSync(uploadPath, { recursive: true });
+          fs.writeFileSync(path.join(uploadPath, filename), fileBuffer);
+          resolve({
+            url: `/uploads/${filename}`,
+            public_id: filename
+          });
         } else {
           resolve({
             url: result.secure_url,

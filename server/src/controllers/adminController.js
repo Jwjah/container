@@ -248,8 +248,15 @@ exports.cancelOrder = async (req, res) => {
 
 // DELETE /api/admin/danger — Wipe operations (Danger Zone)
 exports.wipeOperations = async (req, res) => {
+  const isSQLite = process.env.DB_MODE === 'sqlite' || process.env.DB_HOST === 'mysql9.serv00.com';
   try {
     const { target } = req.body;
+    
+    if (isSQLite) {
+      await db.execute('PRAGMA foreign_keys = OFF');
+    } else {
+      await db.execute('SET FOREIGN_KEY_CHECKS = 0');
+    }
     
     if (target === 'orders') {
       const tables = [
@@ -283,7 +290,7 @@ exports.wipeOperations = async (req, res) => {
         }
       }
       try {
-        await db.execute('DELETE FROM notifications WHERE type = "order" OR type = "delivery"');
+        await db.execute("DELETE FROM notifications WHERE type = 'order' OR type = 'delivery'");
       } catch (e) {
         console.warn('Wipe warning for notifications:', e.message);
       }
@@ -334,6 +341,16 @@ exports.wipeOperations = async (req, res) => {
   } catch (err) {
     console.error('Wipe error:', err);
     res.status(500).json({ error: 'Wipe failed' });
+  } finally {
+    try {
+      if (isSQLite) {
+        await db.execute('PRAGMA foreign_keys = ON');
+      } else {
+        await db.execute('SET FOREIGN_KEY_CHECKS = 1');
+      }
+    } catch (e) {
+      console.warn('Failed to restore foreign keys:', e.message);
+    }
   }
 };
 

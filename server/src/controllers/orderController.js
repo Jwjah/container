@@ -726,15 +726,31 @@ exports.downloadPrintPdf = async (req, res) => {
       }
     }
 
-    // Download original PDF from Cloudinary URL
-    const axios = require('axios');
+    // Download original PDF from Cloudinary or read from local storage
+    const fs = require('fs');
+    const path = require('path');
     let pdfBuffer;
-    try {
-      const response = await axios.get(file.file_path, { responseType: 'arraybuffer' });
-      pdfBuffer = Buffer.from(response.data);
-    } catch (fetchErr) {
-      console.error('Failed to download file from Cloudinary:', fetchErr.message);
-      return res.status(500).json({ error: 'Failed to fetch original file from cloud storage' });
+    const isRemote = file.file_path.startsWith('http://') || file.file_path.startsWith('https://');
+    if (isRemote) {
+      const axios = require('axios');
+      try {
+        const response = await axios.get(file.file_path, { responseType: 'arraybuffer' });
+        pdfBuffer = Buffer.from(response.data);
+      } catch (fetchErr) {
+        console.error('Failed to download file from Cloudinary:', fetchErr.message);
+        return res.status(500).json({ error: 'Failed to fetch original file from cloud storage' });
+      }
+    } else {
+      try {
+        let localPath = file.file_path;
+        if (!path.isAbsolute(localPath)) {
+          localPath = path.join(__dirname, '../..', localPath);
+        }
+        pdfBuffer = fs.readFileSync(localPath);
+      } catch (fetchErr) {
+        console.error('Failed to read local file:', fetchErr.message);
+        return res.status(500).json({ error: 'Failed to fetch original file from local storage' });
+      }
     }
     
     // If not a PDF, send directly
